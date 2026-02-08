@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facebook帖子监控系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1c1e21; }
+
+        .header { background: #1877f2; color: white; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+        .header h1 { font-size: 20px; font-weight: 600; }
+        .header-actions { display: flex; gap: 12px; align-items: center; }
+        .btn { padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-start { background: #42b72a; color: white; }
+        .btn-start:hover { background: #36a420; }
+        .btn-stop { background: #fa3e3e; color: white; }
+        .btn-stop:hover { background: #e02020; }
+        .btn-secondary { background: rgba(255,255,255,0.2); color: white; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.3); }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        /* 状态栏 */
+        .status-bar { background: white; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+        .status-item { display: flex; flex-direction: column; gap: 4px; }
+        .status-label { font-size: 12px; color: #65676b; text-transform: uppercase; }
+        .status-value { font-size: 16px; font-weight: 600; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .status-dot.running { background: #42b72a; animation: pulse 1.5s infinite; }
+        .status-dot.stopped { background: #fa3e3e; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* 统计卡片 */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); text-align: center; }
+        .stat-number { font-size: 32px; font-weight: 700; color: #1877f2; }
+        .stat-label { font-size: 14px; color: #65676b; margin-top: 4px; }
+        .stat-card.target .stat-number { color: #42b72a; }
+        .stat-card.non-target .stat-number { color: #fa3e3e; }
+        .stat-card.liked .stat-number { color: #f7b928; }
+
+        /* 标签页 */
+        .tabs { display: flex; gap: 0; margin-bottom: 20px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .tab { padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: 500; color: #65676b; border-bottom: 3px solid transparent; transition: all 0.2s; flex: 1; text-align: center; }
+        .tab:hover { background: #f0f2f5; }
+        .tab.active { color: #1877f2; border-bottom-color: #1877f2; }
+
+        /* 筛选栏 */
+        .filters { background: white; border-radius: 8px; padding: 12px 20px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.1); flex-wrap: wrap; }
+        .filter-select, .filter-input { padding: 8px 12px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; outline: none; }
+        .filter-select:focus, .filter-input:focus { border-color: #1877f2; }
+        .filter-input { flex: 1; min-width: 200px; }
+
+        /* 帖子列表 */
+        .post-list { display: flex; flex-direction: column; gap: 12px; }
+        .post-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s; }
+        .post-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .post-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .post-author { font-weight: 600; font-size: 15px; }
+        .post-author a { color: #1877f2; text-decoration: none; }
+        .post-author a:hover { text-decoration: underline; }
+        .post-meta { font-size: 12px; color: #65676b; display: flex; gap: 8px; margin-top: 4px; }
+        .post-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+        .badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge-target { background: #e7f5e0; color: #42b72a; }
+        .badge-non-target { background: #fce4e4; color: #fa3e3e; }
+        .badge-source { background: #e4f0fc; color: #1877f2; }
+        .badge-liked { background: #fff3cd; color: #d4a600; }
+        .badge-interested { background: #d4edda; color: #155724; }
+        .badge-not-interested { background: #f8d7da; color: #721c24; }
+        .post-content { font-size: 14px; line-height: 1.6; color: #1c1e21; margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; max-height: 150px; overflow: hidden; position: relative; }
+        .post-content.expanded { max-height: none; }
+        .post-content:not(.expanded)::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, white); }
+        .post-actions-bar { display: flex; gap: 12px; align-items: center; padding-top: 12px; border-top: 1px solid #e4e6eb; }
+        .post-link { color: #1877f2; text-decoration: none; font-size: 13px; }
+        .post-link:hover { text-decoration: underline; }
+
+        /* 帖子详情模态框 */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; justify-content: center; align-items: flex-start; padding: 40px 20px; overflow-y: auto; }
+        .modal { background: white; border-radius: 12px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; }
+        .modal-header { padding: 20px 24px; border-bottom: 1px solid #e4e6eb; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 1; border-radius: 12px 12px 0 0; }
+        .modal-header h2 { font-size: 18px; }
+        .modal-close { background: #e4e6eb; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+        .modal-close:hover { background: #d0d2d6; }
+        .modal-body { padding: 24px; }
+        .detail-section { margin-bottom: 20px; }
+        .detail-section h3 { font-size: 14px; font-weight: 600; color: #65676b; margin-bottom: 8px; text-transform: uppercase; }
+        .detail-content { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; background: #f0f2f5; padding: 16px; border-radius: 8px; }
+        .detail-info { display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 14px; }
+        .detail-info dt { color: #65676b; font-weight: 500; }
+        .detail-info dd { color: #1c1e21; }
+        .ai-result { background: #f0f2f5; padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+
+        /* 操作记录表 */
+        .actions-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .actions-table th, .actions-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e4e6eb; }
+        .actions-table th { background: #f0f2f5; font-weight: 600; color: #65676b; }
+        .action-status-pending { color: #f7b928; }
+        .action-status-success { color: #42b72a; }
+        .action-status-failed { color: #fa3e3e; }
+
+        /* 分页 */
+        .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 20px; align-items: center; }
+        .pagination .btn { padding: 6px 14px; font-size: 13px; background: white; color: #1c1e21; border: 1px solid #dddfe2; }
+        .pagination .btn:hover { background: #f0f2f5; }
+        .pagination .btn.active { background: #1877f2; color: white; border-color: #1877f2; }
+        .pagination .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .page-info { font-size: 13px; color: #65676b; }
+
+        /* 监控日志 */
+        .log-list { font-size: 13px; }
+        .log-item { padding: 10px 16px; border-bottom: 1px solid #e4e6eb; display: flex; gap: 16px; align-items: center; }
+        .log-item:last-child { border-bottom: none; }
+        .log-page-type { font-weight: 600; min-width: 80px; }
+
+        /* 空状态 */
+        .empty-state { text-align: center; padding: 60px 20px; color: #65676b; }
+        .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+        .empty-state h3 { margin-bottom: 8px; }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .filters { flex-direction: column; }
+            .detail-info { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <!-- 头部 -->
+    <header class="header">
+        <h1>Facebook帖子监控系统</h1>
+        <div class="header-actions">
+            <button class="btn btn-start" v-if="!status.running" @click="startMonitor">启动监控</button>
+            <button class="btn btn-stop" v-else @click="stopMonitor">停止监控</button>
+            <button class="btn btn-secondary" @click="refreshData">刷新数据</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">运行状态</span>
+                <span class="status-value">
+                    <span class="status-dot" :class="status.running ? 'running' : 'stopped'"></span>
+                    {{ status.running ? '运行中' : '已停止' }}
+                </span>
+            </div>
+            <div class="status-item" v-if="status.running">
+                <span class="status-label">当前页面</span>
+                <span class="status-value">{{ status.current_page_label || '-' }}</span>
+            </div>
+            <div class="status-item" v-if="status.running">
+                <span class="status-label">当前轮次</span>
+                <span class="status-value">{{ status.round_count }}</span>
+            </div>
+            <div class="status-item" v-if="status.running">
+                <span class="status-label">本页已处理</span>
+                <span class="status-value">{{ status.posts_processed }}</span>
+            </div>
+            <div class="status-item" v-if="status.last_action">
+                <span class="status-label">最新操作</span>
+                <span class="status-value" style="font-size:13px; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ status.last_action }}</span>
+            </div>
+            <div class="status-item" v-if="status.error">
+                <span class="status-label">错误</span>
+                <span class="status-value" style="color:#fa3e3e; font-size:13px;">{{ status.error }}</span>
+            </div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.total_posts || 0 }}</div>
+                <div class="stat-label">总帖子数</div>
+            </div>
+            <div class="stat-card target">
+                <div class="stat-number">{{ stats.target_posts || 0 }}</div>
+                <div class="stat-label">目标客户</div>
+            </div>
+            <div class="stat-card non-target">
+                <div class="stat-number">{{ stats.non_target_posts || 0 }}</div>
+                <div class="stat-label">非目标客户</div>
+            </div>
+            <div class="stat-card liked">
+                <div class="stat-number">{{ stats.liked_posts || 0 }}</div>
+                <div class="stat-label">已点赞</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ stats.interested_posts || 0 }}</div>
+                <div class="stat-label">已标记有兴趣</div>
+            </div>
+        </div>
+
+        <!-- 标签页 -->
+        <div class="tabs">
+            <div class="tab" :class="{ active: activeTab === 'posts' }" @click="activeTab = 'posts'">帖子列表</div>
+            <div class="tab" :class="{ active: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">监控日志</div>
+        </div>
+
+        <!-- 帖子列表 -->
+        <div v-if="activeTab === 'posts'">
+            <!-- 筛选栏 -->
+            <div class="filters">
+                <select class="filter-select" v-model="filters.source" @change="loadPosts(1)">
+                    <option value="">全部来源</option>
+                    <option value="home">首页动态</option>
+                    <option value="groups">小组动态</option>
+                    <option value="search">搜索帖子</option>
+                </select>
+                <select class="filter-select" v-model="filters.is_target" @change="loadPosts(1)">
+                    <option value="">全部类型</option>
+                    <option value="true">目标客户</option>
+                    <option value="false">非目标客户</option>
+                </select>
+                <input class="filter-input" v-model="filters.search" placeholder="搜索帖子内容..." @keyup.enter="loadPosts(1)" />
+                <button class="btn btn-secondary" style="background:#1877f2; color:white;" @click="loadPosts(1)">搜索</button>
+            </div>
+
+            <!-- 帖子卡片 -->
+            <div class="post-list">
+                <div class="post-card" v-for="post in posts" :key="post.id" @click="openPostDetail(post)">
+                    <div class="post-header">
+                        <div>
+                            <div class="post-author">
+                                <a v-if="post.author_profile_url" :href="post.author_profile_url" target="_blank" @click.stop>{{ post.author_name || '未知用户' }}</a>
+                                <span v-else>{{ post.author_name || '未知用户' }}</span>
+                            </div>
+                            <div class="post-meta">
+                                <span v-if="post.post_time">{{ post.post_time }}</span>
+                                <span>{{ formatDate(post.created_at) }}</span>
+                                <span v-if="post.author_id">ID: {{ post.author_id }}</span>
+                            </div>
+                        </div>
+                        <div class="post-badges">
+                            <span class="badge badge-source">{{ sourceLabel(post.source_page) }}</span>
+                            <span class="badge" :class="post.is_target ? 'badge-target' : 'badge-non-target'">{{ post.is_target ? '目标客户' : '非目标' }}</span>
+                            <span class="badge badge-liked" v-if="post.action_liked">已点赞</span>
+                            <span class="badge badge-interested" v-if="post.action_interested">有兴趣</span>
+                            <span class="badge badge-not-interested" v-if="post.action_not_interested">没兴趣</span>
+                        </div>
+                    </div>
+                    <div class="post-content" :class="{ expanded: post._expanded }">{{ post.content }}</div>
+                    <div class="post-actions-bar">
+                        <a v-if="post.post_url" :href="post.post_url" target="_blank" class="post-link" @click.stop>查看原帖</a>
+                        <span style="font-size:12px; color:#65676b;">帖子ID: {{ post.post_id }}</span>
+                        <span style="font-size:12px; color:#65676b; margin-left:auto;">操作: {{ post.actions ? post.actions.length : 0 }} 条记录</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 空状态 -->
+            <div class="empty-state" v-if="posts.length === 0 && !loading">
+                <h3>暂无帖子数据</h3>
+                <p>启动监控后，帖子会自动出现在这里</p>
+            </div>
+
+            <!-- 分页 -->
+            <div class="pagination" v-if="totalPages > 1">
+                <button class="btn" :disabled="currentPage <= 1" @click="loadPosts(currentPage - 1)">上一页</button>
+                <template v-for="p in visiblePages" :key="p">
+                    <button class="btn" :class="{ active: p === currentPage }" @click="loadPosts(p)">{{ p }}</button>
+                </template>
+                <button class="btn" :disabled="currentPage >= totalPages" @click="loadPosts(currentPage + 1)">下一页</button>
+                <span class="page-info">共 {{ totalPosts }} 条</span>
+            </div>
+        </div>
+
+        <!-- 日志标签页 -->
+        <div v-if="activeTab === 'logs'">
+            <div style="background:white; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
+                <div class="log-list">
+                    <div class="log-item" v-for="log in logs" :key="log.id">
+                        <span class="log-page-type" :style="{ color: sourceColor(log.page_type) }">{{ sourceLabel(log.page_type) }}</span>
+                        <span>扫描: {{ log.posts_scanned }}</span>
+                        <span style="color:#42b72a;">新增: {{ log.posts_new }}</span>
+                        <span style="color:#65676b; font-size:12px;">{{ formatDate(log.started_at) }}</span>
+                        <span v-if="log.finished_at" style="color:#65676b; font-size:12px;">~{{ formatDate(log.finished_at) }}</span>
+                    </div>
+                </div>
+                <div class="empty-state" v-if="logs.length === 0" style="padding:40px;">
+                    <h3>暂无监控日志</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帖子详情模态框 -->
+    <div class="modal-overlay" v-if="selectedPost" @click.self="selectedPost = null">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>帖子详情</h2>
+                <button class="modal-close" @click="selectedPost = null">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- 基本信息 -->
+                <div class="detail-section">
+                    <h3>基本信息</h3>
+                    <dl class="detail-info">
+                        <dt>帖子ID</dt><dd>{{ selectedPost.post_id }}</dd>
+                        <dt>作者</dt><dd>{{ selectedPost.author_name || '未知' }}</dd>
+                        <dt>作者ID</dt><dd>{{ selectedPost.author_id || '未知' }}</dd>
+                        <dt>作者主页</dt><dd><a v-if="selectedPost.author_profile_url" :href="selectedPost.author_profile_url" target="_blank">{{ selectedPost.author_profile_url }}</a><span v-else>-</span></dd>
+                        <dt>帖子时间</dt><dd>{{ selectedPost.post_time || '未知' }}</dd>
+                        <dt>来源页面</dt><dd>{{ sourceLabel(selectedPost.source_page) }}</dd>
+                        <dt>采集时间</dt><dd>{{ formatDate(selectedPost.created_at) }}</dd>
+                        <dt>帖子链接</dt><dd><a v-if="selectedPost.post_url" :href="selectedPost.post_url" target="_blank">查看原帖</a><span v-else>-</span></dd>
+                    </dl>
+                </div>
+
+                <!-- AI判定 -->
+                <div class="detail-section">
+                    <h3>AI判定</h3>
+                    <div style="margin-bottom:8px;">
+                        <span class="badge" :class="selectedPost.is_target ? 'badge-target' : 'badge-non-target'" style="font-size:14px; padding:6px 14px;">
+                            {{ selectedPost.is_target ? '目标客户' : '非目标客户' }}
+                        </span>
+                        <span class="badge badge-liked" v-if="selectedPost.action_liked" style="font-size:14px; padding:6px 14px;">已点赞</span>
+                        <span class="badge badge-interested" v-if="selectedPost.action_interested" style="font-size:14px; padding:6px 14px;">有兴趣</span>
+                        <span class="badge badge-not-interested" v-if="selectedPost.action_not_interested" style="font-size:14px; padding:6px 14px;">没兴趣</span>
+                    </div>
+                </div>
+
+                <!-- 帖子内容 -->
+                <div class="detail-section">
+                    <h3>帖子内容</h3>
+                    <div class="detail-content">{{ selectedPost.content }}</div>
+                </div>
+
+                <!-- AI分析详情 -->
+                <div class="detail-section" v-if="selectedPost.ai_result">
+                    <h3>AI分析详情</h3>
+                    <div class="ai-result">{{ selectedPost.ai_result }}</div>
+                </div>
+
+                <!-- 操作记录 -->
+                <div class="detail-section" v-if="selectedPost.actions && selectedPost.actions.length > 0">
+                    <h3>操作记录 (未来多账号发送)</h3>
+                    <table class="actions-table">
+                        <thead>
+                            <tr><th>账号</th><th>操作类型</th><th>状态</th><th>详情</th><th>时间</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="action in selectedPost.actions" :key="action.id">
+                                <td>{{ action.account_id }}</td>
+                                <td>{{ actionTypeLabel(action.action_type) }}</td>
+                                <td :class="'action-status-' + action.action_status">{{ action.action_status }}</td>
+                                <td>{{ action.action_detail || '-' }}</td>
+                                <td>{{ formatDate(action.created_at) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="detail-section" v-else>
+                    <h3>操作记录 (未来多账号发送)</h3>
+                    <p style="color:#65676b; font-size:13px;">暂无操作记录。后续多账号发送任务将记录在此。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+createApp({
+    setup() {
+        const status = ref({ running: false, current_page: '', current_page_label: '', posts_processed: 0, round_count: 0, last_action: '', error: '' });
+        const stats = ref({});
+        const posts = ref([]);
+        const logs = ref([]);
+        const activeTab = ref('posts');
+        const selectedPost = ref(null);
+        const loading = ref(false);
+        const currentPage = ref(1);
+        const totalPosts = ref(0);
+        const totalPages = ref(0);
+        const filters = ref({ source: '', is_target: '', search: '' });
+        let statusTimer = null;
+
+        const visiblePages = computed(() => {
+            const pages = [];
+            const total = totalPages.value;
+            const current = currentPage.value;
+            let start = Math.max(1, current - 2);
+            let end = Math.min(total, current + 2);
+            if (end - start < 4) {
+                if (start === 1) end = Math.min(total, start + 4);
+                else start = Math.max(1, end - 4);
+            }
+            for (let i = start; i <= end; i++) pages.push(i);
+            return pages;
+        });
+
+        async function fetchAPI(url, options) {
+            try {
+                const resp = await fetch(url, options);
+                return await resp.json();
+            } catch (e) {
+                console.error('API error:', e);
+                return null;
+            }
+        }
+
+        async function loadStatus() {
+            const data = await fetchAPI('/api/status');
+            if (data) status.value = data;
+        }
+
+        async function loadStats() {
+            const data = await fetchAPI('/api/stats');
+            if (data && data.success) stats.value = data.data;
+        }
+
+        async function loadPosts(page = 1) {
+            loading.value = true;
+            currentPage.value = page;
+            const params = new URLSearchParams({ page, per_page: 20 });
+            if (filters.value.source) params.set('source', filters.value.source);
+            if (filters.value.is_target) params.set('is_target', filters.value.is_target);
+            if (filters.value.search) params.set('search', filters.value.search);
+
+            const data = await fetchAPI(`/api/posts?${params}`);
+            if (data && data.success) {
+                posts.value = data.data;
+                totalPosts.value = data.total;
+                totalPages.value = data.total_pages;
+            }
+            loading.value = false;
+        }
+
+        async function loadLogs() {
+            const data = await fetchAPI('/api/logs');
+            if (data && data.success) logs.value = data.data;
+        }
+
+        async function startMonitor() {
+            const data = await fetchAPI('/api/start', { method: 'POST' });
+            if (data) {
+                alert(data.message);
+                loadStatus();
+            }
+        }
+
+        async function stopMonitor() {
+            if (!confirm('确定要停止监控吗？')) return;
+            const data = await fetchAPI('/api/stop', { method: 'POST' });
+            if (data) {
+                alert(data.message);
+                loadStatus();
+            }
+        }
+
+        function refreshData() {
+            loadStatus();
+            loadStats();
+            loadPosts(currentPage.value);
+        }
+
+        function openPostDetail(post) {
+            selectedPost.value = post;
+        }
+
+        function sourceLabel(source) {
+            const map = { home: '首页动态', groups: '小组动态', search: '搜索帖子' };
+            return map[source] || source || '未知';
+        }
+
+        function sourceColor(source) {
+            const map = { home: '#1877f2', groups: '#42b72a', search: '#f7b928' };
+            return map[source] || '#65676b';
+        }
+
+        function actionTypeLabel(type) {
+            const map = { message: '私信', friend_request: '加好友', comment: '评论' };
+            return map[type] || type;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleString('zh-CN');
+        }
+
+        onMounted(() => {
+            loadStatus();
+            loadStats();
+            loadPosts();
+            // 定时刷新
+            statusTimer = setInterval(() => {
+                loadStatus();
+                loadStats();
+                if (activeTab.value === 'posts') loadPosts(currentPage.value);
+            }, 10000);
+        });
+
+        onUnmounted(() => {
+            if (statusTimer) clearInterval(statusTimer);
+        });
+
+        return {
+            status, stats, posts, logs, activeTab, selectedPost, loading,
+            currentPage, totalPosts, totalPages, filters, visiblePages,
+            loadPosts, loadLogs, startMonitor, stopMonitor, refreshData,
+            openPostDetail, sourceLabel, sourceColor, actionTypeLabel, formatDate,
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
