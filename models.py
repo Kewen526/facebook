@@ -17,6 +17,7 @@ class Post(Base):
     author_id = Column(String(128), index=True)  # Facebook用户ID
     author_profile_url = Column(Text)  # 作者主页链接
     content = Column(Text)  # 帖子文本内容
+    image_urls = Column(Text)  # 图片URL列表(JSON格式)
     post_time = Column(String(128))  # 帖子时间(原始显示)
     source_page = Column(String(32), index=True)  # 来源页面: home / groups / search
     ai_result = Column(Text)  # AI分析完整响应
@@ -44,6 +45,7 @@ class Post(Base):
             "author_id": self.author_id,
             "author_profile_url": self.author_profile_url,
             "content": self.content,
+            "image_urls": self.image_urls,
             "post_time": self.post_time,
             "source_page": self.source_page,
             "ai_result": self.ai_result,

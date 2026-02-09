@@ -395,6 +395,28 @@ def extract_post_url(post_element):
         return None
 
 
+def _extract_user_id_from_url(href):
+    """从Facebook URL中提取用户ID"""
+    if not href:
+        return ""
+    # 方法1: /user/数字ID/ (小组帖子常见)
+    match = re.search(r'/user/(\d+)/', href)
+    if match:
+        return match.group(1)
+    # 方法2: profile.php?id=数字ID
+    match = re.search(r'profile\.php\?id=(\d+)', href)
+    if match:
+        return match.group(1)
+    # 方法3: facebook.com/用户名 (非数字ID)
+    match = re.search(r'facebook\.com/([a-zA-Z0-9.]+)(?:\?|$|/)', href)
+    if match:
+        val = match.group(1)
+        # 排除facebook内部路径
+        if val not in ('groups', 'pages', 'profile', 'search', 'watch', 'marketplace', 'events', 'gaming', 'reel'):
+            return val
+    return ""
+
+
 def extract_author_info(post_element):
     """提取作者信息"""
     author_name = ""
@@ -412,10 +434,7 @@ def extract_author_info(post_element):
                 href = link.get_attribute('href')
                 if href:
                     author_profile_url = href.split('?')[0]
-                    # 从URL中提取用户ID
-                    match = re.search(r'facebook\.com/(?:profile\.php\?id=)?(\d+|[a-zA-Z0-9.]+)', href)
-                    if match:
-                        author_id = match.group(1)
+                    author_id = _extract_user_id_from_url(href)
         except Exception:
             pass
 
@@ -428,10 +447,18 @@ def extract_author_info(post_element):
                     if 'facebook.com' in href and '/groups/' not in href:
                         author_name = link.text.strip()
                         author_profile_url = href.split('?')[0]
-                        match = re.search(r'facebook\.com/(?:profile\.php\?id=)?(\d+|[a-zA-Z0-9.]+)', href)
-                        if match:
-                            author_id = match.group(1)
+                        author_id = _extract_user_id_from_url(href)
                         break
+            except Exception:
+                pass
+
+        # 方法3: 如果还没找到ID，从帖子HTML中搜索/user/数字/模式
+        if not author_id:
+            try:
+                post_html = post_element.get_attribute('outerHTML')
+                match = re.search(r'/user/(\d+)/', post_html)
+                if match:
+                    author_id = match.group(1)
             except Exception:
                 pass
 
@@ -473,37 +500,146 @@ def extract_post_time(post_element):
 
 
 def get_full_post_content(post_element, driver):
-    """获取帖子完整内容 - 包括展开操作"""
+    """获取帖子完整内容 - 仅提取帖子正文部分，排除作者名、时间、点赞评论等"""
     try:
-        original_content = post_element.text
-        expand_indicators = ["展开", "See more", "Show more", "查看更多", "... 更多"]
+        # 先尝试点击"展开"按钮
+        try:
+            expand_btns = post_element.find_elements(By.XPATH,
+                ".//div[contains(@role,'button') and (contains(text(),'展开') or contains(text(),'See more') or contains(text(),'更多'))]"
+                " | .//span[contains(text(),'展开') or contains(text(),'See more')]/.."
+            )
+            for btn in expand_btns:
+                try:
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+                    time.sleep(0.5)
+                    btn.click()
+                    time.sleep(1.5)
+                    break
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
-        has_expand = any(indicator in original_content for indicator in expand_indicators)
+        # 精确提取帖子正文 - 查找data-ad-preview="message"的div (Facebook帖子正文容器)
+        content = ""
 
-        if has_expand:
+        # 方法1: data-ad-preview="message" 是Facebook帖子正文的标准属性
+        try:
+            msg_divs = post_element.find_elements(By.XPATH, ".//div[@data-ad-preview='message']")
+            if msg_divs:
+                content = msg_divs[0].text.strip()
+        except Exception:
+            pass
+
+        # 方法2: 查找帖子正文区域 - 通常在dir="auto"的div中，位于作者信息之后
+        if not content:
             try:
-                expand_btns = post_element.find_elements(By.XPATH,
-                    ".//div[contains(@role,'button') and (contains(text(),'展开') or contains(text(),'See more') or contains(text(),'更多'))]"
-                    " | .//span[contains(text(),'展开') or contains(text(),'See more')]/.."
+                text_divs = post_element.find_elements(By.XPATH,
+                    ".//div[@dir='auto' and @style and contains(@style,'text-align')]"
                 )
-                for btn in expand_btns:
-                    try:
-                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
-                        time.sleep(0.5)
-                        btn.click()
-                        time.sleep(1.5)
-                        break
-                    except Exception:
-                        continue
+                texts = []
+                for div in text_divs:
+                    t = div.text.strip()
+                    if t and len(t) > 5:
+                        texts.append(t)
+                if texts:
+                    content = "\n".join(texts)
             except Exception:
                 pass
 
-        content = post_element.text
-        return content if content else original_content
+        # 方法3: 查找包含dir="auto"且有实际文本内容的元素（排除按钮文本）
+        if not content:
+            try:
+                auto_divs = post_element.find_elements(By.XPATH,
+                    ".//div[@dir='auto'][not(ancestor::div[@role='button'])]"
+                    "[not(ancestor::form)]"
+                    "[string-length(normalize-space(text())) > 10]"
+                )
+                texts = []
+                seen = set()
+                for div in auto_divs:
+                    t = div.text.strip()
+                    # 排除常见的非正文文本
+                    if t and len(t) > 10 and t not in seen:
+                        # 排除点赞/评论/分享等计数文本
+                        if not re.match(r'^[\d,.]+ ?(likes?|comments?|shares?|赞|条评论|次分享)', t, re.IGNORECASE):
+                            seen.add(t)
+                            texts.append(t)
+                if texts:
+                    # 取最长的文本作为正文
+                    content = max(texts, key=len)
+            except Exception:
+                pass
+
+        # 方法4: 最后的回退 - 使用整个帖子文本但尝试清理
+        if not content:
+            full_text = post_element.text or ""
+            # 按行清理，移除明显的非正文内容
+            lines = full_text.split('\n')
+            body_lines = []
+            skip_patterns = [
+                r'^(Like|Comment|Share|赞|评论|分享|Reply|回复)$',
+                r'^\d+ (likes?|comments?|shares?|赞|条评论|次分享)',
+                r'^(All comments|Most relevant|最相关|所有评论)',
+                r'^(Write a comment|写评论)',
+                r'^\d+[分小时天hmd]',  # 时间戳
+                r'^(Just now|Yesterday|昨天)',
+            ]
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                if any(re.match(p, line, re.IGNORECASE) for p in skip_patterns):
+                    continue
+                body_lines.append(line)
+            # 排除第一行（通常是作者名）和最后几行（通常是互动按钮）
+            if len(body_lines) > 2:
+                content = "\n".join(body_lines[1:-1])
+            elif body_lines:
+                content = "\n".join(body_lines)
+
+        return content.strip()
 
     except Exception as e:
         logger.error(f"获取帖子内容出错: {e}")
         return ""
+
+
+def extract_image_urls(post_element):
+    """从帖子中提取图片URL列表"""
+    image_urls = []
+    try:
+        # 查找帖子中的图片 - 排除头像等小图
+        img_elements = post_element.find_elements(By.XPATH,
+            ".//img[contains(@src,'scontent') or contains(@src,'fbcdn')]"
+        )
+        for img in img_elements:
+            src = img.get_attribute('src') or ''
+            width = img.get_attribute('width') or '0'
+            height = img.get_attribute('height') or '0'
+            # 排除头像等小图（通常小于100px）
+            try:
+                w = int(width) if width.isdigit() else 0
+                h = int(height) if height.isdigit() else 0
+            except (ValueError, TypeError):
+                w, h = 0, 0
+
+            if src and ('scontent' in src or 'fbcdn' in src):
+                # 如果有尺寸信息，排除小图
+                if w > 0 and h > 0 and (w < 100 or h < 100):
+                    continue
+                # 排除头像类图片（URL中通常包含特定路径标识）
+                if '/cp0/' in src or '/t51.1985-15/' in src:
+                    continue
+                image_urls.append(src)
+
+        # 去重
+        image_urls = list(dict.fromkeys(image_urls))
+        # 最多取前5张
+        return image_urls[:5]
+    except Exception as e:
+        logger.error(f"提取图片URL出错: {e}")
+        return []
 
 
 def click_three_dots_menu(post_element, driver):
@@ -660,36 +796,48 @@ def process_single_post(post_element, driver, page_name):
 
     # 4. 获取帖子完整内容
     content = get_full_post_content(post_element, driver)
-    if not content or len(content.strip()) < 10:
-        logger.warning(f"帖子 {post_id} 内容过短，跳过")
+
+    # 5. 提取图片URL
+    image_urls = extract_image_urls(post_element)
+
+    # 6. 跳过无文本且无图片的帖子
+    has_text = content and len(content.strip()) >= 10
+    has_images = len(image_urls) > 0
+
+    if not has_text and not has_images:
+        logger.warning(f"帖子 {post_id} 无文本且无图片，跳过")
         return None
 
-    # 5. 提取元数据
+    if not has_text:
+        logger.info(f"帖子 {post_id} 无文本但有{len(image_urls)}张图片，使用视觉AI分析")
+
+    # 7. 提取元数据
     post_url = extract_post_url(post_element)
     author_name, author_id, author_profile_url = extract_author_info(post_element)
     post_time = extract_post_time(post_element)
 
-    update_status(last_post_content=content[:200])
-    logger.info(f"帖子内容: {content[:100]}...")
+    update_status(last_post_content=content[:200] if content else f"[图片帖子 {len(image_urls)}张]")
+    logger.info(f"帖子内容: {content[:100] if content else '[纯图片]'}... 图片: {len(image_urls)}张")
 
-    # 6. 同步AI分析 - 必须等结果
+    # 8. 同步AI分析 - 有图片用视觉模型，否则用文本模型
     update_status(last_action=f"AI分析帖子 {post_id}")
-    logger.info(f"开始AI分析帖子 {post_id}...")
-    is_target, ai_response = analyze_post(content)
+    logger.info(f"开始AI分析帖子 {post_id} ({'视觉模型' if has_images else '文本模型'})...")
+    is_target, ai_response = analyze_post(content or "", image_urls if has_images else None)
     logger.info(f"AI分析结果: {'目标客户' if is_target else '非目标客户'}")
 
-    # 7. 保存到数据库
+    # 9. 保存到数据库
     post_data = {
         "post_id": post_id,
         "post_url": post_url,
         "author_name": author_name,
         "author_id": author_id,
         "author_profile_url": author_profile_url,
-        "content": content,
+        "content": content or f"[图片帖子] {' '.join(image_urls[:3])}",
         "post_time": post_time,
         "source_page": page_name,
         "ai_result": ai_response,
         "is_target": is_target,
+        "image_urls": json.dumps(image_urls) if image_urls else None,
         "action_interested": False,
         "action_not_interested": False,
         "action_liked": False,
