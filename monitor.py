@@ -104,6 +104,7 @@ def create_driver():
     try:
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.chrome.service import Service
 
         chrome_options = Options()
         chrome_options.add_argument("--start-maximized")
@@ -119,7 +120,14 @@ def create_driver():
         os.makedirs(USER_DATA_DIR, exist_ok=True)
         chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
 
-        driver = webdriver.Chrome(options=chrome_options)
+        # 使用webdriver-manager自动管理ChromeDriver
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            logger.info("使用webdriver-manager自动安装ChromeDriver")
+        except ImportError:
+            driver = webdriver.Chrome(options=chrome_options)
 
         # 注入反检测脚本
         driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
