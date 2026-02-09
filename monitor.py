@@ -78,6 +78,7 @@ def download_cookies():
 
 def create_driver():
     """创建浏览器实例 - 带反检测措施"""
+    print("[Monitor] 创建浏览器实例...", flush=True)
     logger.info("创建浏览器实例...")
 
     # 先尝试undetected-chromedriver
@@ -92,12 +93,12 @@ def create_driver():
         options.add_argument("--disable-gpu")
         user_agent = random.choice(USER_AGENTS)
         options.add_argument(f"--user-agent={user_agent}")
-        os.makedirs(USER_DATA_DIR, exist_ok=True)
-        options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
         driver = uc.Chrome(options=options, version_main=None)
+        print("[Monitor] 使用undetected-chromedriver创建成功", flush=True)
         logger.info("使用undetected-chromedriver创建成功")
         return driver
     except Exception as e:
+        print(f"[Monitor] undetected-chromedriver不可用({e})，使用Selenium+反检测", flush=True)
         logger.info(f"undetected-chromedriver不可用({e})，使用Selenium+反检测")
 
     # Selenium + 反检测
@@ -117,14 +118,13 @@ def create_driver():
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option("useAutomationExtension", False)
         chrome_options.add_argument(f"--user-agent={random.choice(USER_AGENTS)}")
-        os.makedirs(USER_DATA_DIR, exist_ok=True)
-        chrome_options.add_argument(f"--user-data-dir={USER_DATA_DIR}")
 
         # 使用webdriver-manager自动管理ChromeDriver
         try:
             from webdriver_manager.chrome import ChromeDriverManager
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=chrome_options)
+            print("[Monitor] 使用webdriver-manager自动安装ChromeDriver成功", flush=True)
             logger.info("使用webdriver-manager自动安装ChromeDriver")
         except ImportError:
             driver = webdriver.Chrome(options=chrome_options)
@@ -848,27 +848,35 @@ def start_monitor():
     update_status(running=True, error="")
 
     # 1. 下载cookies
+    print("[Monitor] 步骤1: 下载Cookie文件...", flush=True)
     logger.info("步骤1: 下载Cookie文件...")
     cookies_file = download_cookies()
     if not cookies_file:
+        print("[Monitor] Cookie下载失败!", flush=True)
         update_status(running=False, error="Cookie下载失败")
         return
+    print(f"[Monitor] Cookie下载成功: {cookies_file}", flush=True)
 
     # 2. 创建浏览器
+    print("[Monitor] 步骤2: 创建浏览器实例...", flush=True)
     logger.info("步骤2: 创建浏览器实例...")
     driver = create_driver()
     if not driver:
+        print("[Monitor] 浏览器创建失败!", flush=True)
         update_status(running=False, error="浏览器创建失败")
         return
+    print("[Monitor] 浏览器创建成功!", flush=True)
 
     try:
         # 3. 加载cookies
+        print("[Monitor] 步骤3: 加载Cookie...", flush=True)
         logger.info("步骤3: 加载Cookie...")
         if not load_cookies(driver, cookies_file):
             update_status(running=False, error="Cookie加载失败")
             return
 
         # 4. 打开三个标签页
+        print("[Monitor] 步骤4: 打开三个监控标签页...", flush=True)
         logger.info("步骤4: 打开三个监控标签页...")
         open_all_tabs(driver)
 
