@@ -32,6 +32,7 @@ class Post(Base):
     __table_args__ = (
         Index('idx_source_created', 'source_page', 'created_at'),
         Index('idx_is_target', 'is_target'),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
     )
 
     def to_dict(self):
@@ -73,6 +74,7 @@ class PostAction(Base):
 
     __table_args__ = (
         Index('idx_action_account_status', 'account_id', 'action_status'),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
     )
 
     def to_dict(self):
@@ -98,6 +100,10 @@ class MonitorLog(Base):
     posts_new = Column(Integer, default=0)
     started_at = Column(DateTime)
     finished_at = Column(DateTime)
+
+    __table_args__ = (
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
+    )
 
     def to_dict(self):
         return {

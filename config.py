@@ -2,12 +2,12 @@ import os
 import random
 
 # ============ 数据库配置 ============
-DB_HOST = os.environ.get("DB_HOST", "localhost")
-DB_PORT = os.environ.get("DB_PORT", "5432")
+DB_HOST = os.environ.get("DB_HOST", "47.95.157.46")
+DB_PORT = os.environ.get("DB_PORT", "3306")
 DB_NAME = os.environ.get("DB_NAME", "facebook_monitor")
-DB_USER = os.environ.get("DB_USER", "fbuser")
-DB_PASS = os.environ.get("DB_PASS", "fb_monitor_2024")
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DB_USER = os.environ.get("DB_USER", "root")
+DB_PASS = os.environ.get("DB_PASS", "root@kunkun")
+DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 # ============ Flask配置 ============
 FLASK_PORT = 6000
