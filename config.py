@@ -1,5 +1,6 @@
 import os
 import random
+from urllib.parse import quote_plus as _qp
 
 # ============ 数据库配置 ============
 DB_HOST = os.environ.get("DB_HOST", "47.95.157.46")
@@ -7,10 +8,10 @@ DB_PORT = os.environ.get("DB_PORT", "3306")
 DB_NAME = os.environ.get("DB_NAME", "facebook_monitor")
 DB_USER = os.environ.get("DB_USER", "root")
 DB_PASS = os.environ.get("DB_PASS", "root@kunkun")
-DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
+DATABASE_URL = f"mysql+pymysql://{DB_USER}:{_qp(DB_PASS)}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 # ============ Flask配置 ============
-FLASK_PORT = 6000
+FLASK_PORT = 8080
 FLASK_DEBUG = False
 
 # ============ Cookie配置 ============
