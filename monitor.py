@@ -234,21 +234,21 @@ def open_all_tabs(driver):
 
     # 第一个标签页 - 首页 (当前标签)
     driver.get(MONITOR_PAGES[0]["url"])
-    time.sleep(5)
+    time.sleep(3)
     logger.info(f"标签页1: {MONITOR_PAGES[0]['label']} 已打开")
 
     # 第二个标签页 - 小组
     driver.execute_script("window.open('');")
     driver.switch_to.window(driver.window_handles[1])
     driver.get(MONITOR_PAGES[1]["url"])
-    time.sleep(5)
+    time.sleep(3)
     logger.info(f"标签页2: {MONITOR_PAGES[1]['label']} 已打开")
 
     # 第三个标签页 - 搜索
     driver.execute_script("window.open('');")
     driver.switch_to.window(driver.window_handles[2])
     driver.get(MONITOR_PAGES[2]["url"])
-    time.sleep(5)
+    time.sleep(3)
     logger.info(f"标签页3: {MONITOR_PAGES[2]['label']} 已打开")
 
     # 切回第一个标签页
@@ -261,7 +261,7 @@ def switch_to_tab(driver, tab_index):
     handles = driver.window_handles
     if tab_index < len(handles):
         driver.switch_to.window(handles[tab_index])
-        time.sleep(2)
+        time.sleep(1)
         logger.info(f"已切换到标签页 {tab_index + 1}: {MONITOR_PAGES[tab_index]['label']}")
         return True
     logger.error(f"标签页 {tab_index} 不存在")
@@ -281,7 +281,7 @@ def refresh_page(driver, page_config, tab_index):
             if scroll_pos < 100:
                 # 页面已在顶部，可能已自动刷新
                 logger.info("首页可能已自动刷新，跳过点击按钮")
-                time.sleep(2)
+                time.sleep(1)
                 return True
 
             # 点击首页按钮 (Home SVG icon)
@@ -293,13 +293,13 @@ def refresh_page(driver, page_config, tab_index):
                 )
                 home_btn.click()
                 logger.info("已点击首页按钮")
-                time.sleep(4)
+                time.sleep(2)
                 return True
             except Exception:
                 # 备用方案: 直接导航
                 logger.warning("未找到首页按钮，使用导航刷新")
                 driver.get(page_config["url"])
-                time.sleep(4)
+                time.sleep(2)
                 return True
 
         elif refresh_type == "groups_link":
@@ -312,25 +312,25 @@ def refresh_page(driver, page_config, tab_index):
                 )
                 groups_link.click()
                 logger.info("已点击小组链接")
-                time.sleep(4)
+                time.sleep(2)
                 return True
             except Exception:
                 logger.warning("未找到小组链接，使用导航刷新")
                 driver.get(page_config["url"])
-                time.sleep(4)
+                time.sleep(2)
                 return True
 
         elif refresh_type == "search_refilter":
             # 搜索页面 - 重新导航刷新
             driver.get(page_config["url"])
             logger.info("搜索页面已重新加载")
-            time.sleep(5)
+            time.sleep(3)
             return True
 
     except Exception as e:
         logger.error(f"刷新页面失败: {e}")
         driver.get(page_config["url"])
-        time.sleep(5)
+        time.sleep(3)
         return True
 
 
@@ -511,9 +511,9 @@ def get_full_post_content(post_element, driver):
             for btn in expand_btns:
                 try:
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                     btn.click()
-                    time.sleep(1.5)
+                    time.sleep(0.8)
                     break
                 except Exception:
                     continue
@@ -677,6 +677,7 @@ def _clean_content_for_ai(content, author_name=None):
     return '\n'.join(cleaned_lines).strip()
 
 
+def click_three_dots_menu(post_element, driver):
     """点击帖子的三个点菜单按钮"""
     try:
         # 方法1: 使用aria-label定位 (兼容中英文)
@@ -689,10 +690,10 @@ def _clean_content_for_ai(content, author_name=None):
             ") and @aria-haspopup='menu']"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dots_btn)
-        time.sleep(0.5)
+        time.sleep(0.3)
         dots_btn.click()
         logger.info("已点击三个点菜单")
-        time.sleep(2)
+        time.sleep(1)
         return True
     except Exception:
         pass
@@ -704,10 +705,10 @@ def _clean_content_for_ai(content, author_name=None):
             "[.//svg//path[contains(@d,'M458 360')]]"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dots_btn)
-        time.sleep(0.5)
+        time.sleep(0.3)
         dots_btn.click()
         logger.info("已点击三个点菜单(SVG方式)")
-        time.sleep(2)
+        time.sleep(1)
         return True
     except Exception:
         pass
@@ -770,10 +771,10 @@ def click_like(post_element, driver):
             ".//div[@aria-label='赞' or @aria-label='Like'][@role='button']"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", like_btn)
-        time.sleep(0.5)
+        time.sleep(0.3)
         like_btn.click()
         logger.info("已点赞")
-        time.sleep(2)
+        time.sleep(1)
         return True
     except Exception as e:
         logger.warning(f"点赞失败: {e}")
@@ -833,7 +834,7 @@ def process_single_post(post_element, driver, page_name):
     # 3. 滚动到帖子可见
     try:
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post_element)
-        time.sleep(1)
+        time.sleep(0.5)
     except Exception:
         pass
 
@@ -1097,14 +1098,14 @@ def start_monitor():
 
                 # 页面间随机延迟
                 if i < len(MONITOR_PAGES) - 1:
-                    delay = random.uniform(3, 8)
+                    delay = random.uniform(2, 4)
                     logger.info(f"等待 {delay:.1f}s 后切换到下一个页面...")
                     time.sleep(delay)
 
             logger.info(f"\n第 {round_count} 轮完成，共处理 {total_new} 个新帖子")
 
             # 轮次间等待
-            wait_time = random.uniform(10, 20)
+            wait_time = random.uniform(5, 10)
             logger.info(f"等待 {wait_time:.1f}s 后开始下一轮...")
             time.sleep(wait_time)
 
