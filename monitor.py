@@ -605,7 +605,78 @@ def get_full_post_content(post_element, driver):
         return ""
 
 
-def click_three_dots_menu(post_element, driver):
+def _is_junk_content(text):
+    """检查内容是否是无实质意义的垃圾内容（纯标点/表情/链接等）"""
+    if not text:
+        return True
+    # 移除URL链接
+    cleaned = re.sub(r'https?://\S+', '', text)
+    # 移除表情符号（emoji）
+    cleaned = re.sub(r'[\U00010000-\U0010ffff]', '', cleaned)
+    # 移除标点符号和空白
+    cleaned = re.sub(r'[\s\.,!?;:·…\-_=+\[\](){}|/\\@#$%^&*~`\'"<>。，！？、；：""''【】（）《》]+', '', cleaned)
+    # 如果清理后剩余内容不足10个字符，认为是垃圾内容
+    return len(cleaned) < 10
+
+
+def _is_non_business_content(text):
+    """检查内容是否明显与代发业务无关（交友/征婚/社交等）"""
+    if not text:
+        return False
+    text_lower = text.lower()
+    # 交友/征婚/社交关键词
+    dating_patterns = [
+        r'looking for .{0,20}(partner|relationship|love|husband|wife|boyfriend|girlfriend|soulmate|companion)',
+        r'(single|divorced).{0,30}(looking|searching|seeking)',
+        r'寻找.{0,10}(伴侣|对象|另一半|男友|女友|老公|老婆)',
+        r'(dating|hookup|romance|marry|marriage)',
+        r'(征婚|相亲|脱单|找对象)',
+    ]
+    for pattern in dating_patterns:
+        if re.search(pattern, text_lower):
+            return True
+    return False
+
+
+def _clean_content_for_ai(content, author_name=None):
+    """清洗帖子内容：移除小组名称、作者名等非正文信息"""
+    if not content:
+        return content
+
+    lines = content.split('\n')
+    cleaned_lines = []
+
+    # 已知的小组名称/页面标题关键词模式（这些出现在正文开头通常是小组名或用户名）
+    group_title_patterns = [
+        r'^.{0,60}(代发|代购|Dropshipping|Shopify|采购代理|供应商|sourcing|fulfillment|ecommerce)',
+        r'^.{0,60}(1688|阿里巴巴|alibaba|Global Traders)',
+    ]
+
+    for i, line in enumerate(lines):
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
+
+        # 跳过第一行如果匹配小组名/页面标题模式
+        if i == 0:
+            is_group_title = False
+            for pattern in group_title_patterns:
+                if re.search(pattern, line_stripped, re.IGNORECASE):
+                    is_group_title = True
+                    break
+            if is_group_title:
+                logger.debug(f"移除疑似小组名/标题: {line_stripped[:50]}")
+                continue
+
+        # 跳过作者名行
+        if author_name and line_stripped == author_name:
+            continue
+
+        cleaned_lines.append(line_stripped)
+
+    return '\n'.join(cleaned_lines).strip()
+
+
     """点击帖子的三个点菜单按钮"""
     try:
         # 方法1: 使用aria-label定位 (兼容中英文)
@@ -779,13 +850,29 @@ def process_single_post(post_element, driver, page_name):
     author_name, author_id, author_profile_url = extract_author_info(post_element)
     post_time = extract_post_time(post_element)
 
-    update_status(last_post_content=content[:200])
-    logger.info(f"帖子内容: {content[:100]}...")
+    # 6.1 预过滤：纯标点/表情/链接等垃圾内容直接跳过
+    if _is_junk_content(content):
+        logger.info(f"帖子 {post_id} 内容无实质文字，跳过")
+        return None
 
-    # 7. 同步AI分析
+    # 6.2 预过滤：交友/征婚等明显非商业帖子直接跳过
+    if _is_non_business_content(content):
+        logger.info(f"帖子 {post_id} 为交友/社交帖，跳过")
+        return None
+
+    # 6.3 清洗内容：移除小组名称、作者名等非正文信息
+    clean_content = _clean_content_for_ai(content, author_name)
+    if not clean_content or len(clean_content.strip()) < 10:
+        logger.info(f"帖子 {post_id} 清洗后无实质内容，跳过")
+        return None
+
+    update_status(last_post_content=content[:200])
+    logger.info(f"帖子内容: {clean_content[:100]}...")
+
+    # 7. 同步AI分析（使用清洗后的内容）
     update_status(last_action=f"AI分析帖子 {post_id}")
     logger.info(f"开始AI分析帖子 {post_id}...")
-    is_target, ai_response = analyze_post(content)
+    is_target, ai_response = analyze_post(clean_content)
     logger.info(f"AI分析结果: {'目标客户' if is_target else '非目标客户'}")
 
     # 8. 保存到数据库
