@@ -605,49 +605,17 @@ def get_full_post_content(post_element, driver):
         return ""
 
 
-def extract_image_urls(post_element):
-    """从帖子中提取图片URL列表"""
-    image_urls = []
-    try:
-        # 查找帖子中的图片 - 排除头像等小图
-        img_elements = post_element.find_elements(By.XPATH,
-            ".//img[contains(@src,'scontent') or contains(@src,'fbcdn')]"
-        )
-        for img in img_elements:
-            src = img.get_attribute('src') or ''
-            width = img.get_attribute('width') or '0'
-            height = img.get_attribute('height') or '0'
-            # 排除头像等小图（通常小于100px）
-            try:
-                w = int(width) if width.isdigit() else 0
-                h = int(height) if height.isdigit() else 0
-            except (ValueError, TypeError):
-                w, h = 0, 0
-
-            if src and ('scontent' in src or 'fbcdn' in src):
-                # 如果有尺寸信息，排除小图
-                if w > 0 and h > 0 and (w < 100 or h < 100):
-                    continue
-                # 排除头像类图片（URL中通常包含特定路径标识）
-                if '/cp0/' in src or '/t51.1985-15/' in src:
-                    continue
-                image_urls.append(src)
-
-        # 去重
-        image_urls = list(dict.fromkeys(image_urls))
-        # 最多取前5张
-        return image_urls[:5]
-    except Exception as e:
-        logger.error(f"提取图片URL出错: {e}")
-        return []
-
-
 def click_three_dots_menu(post_element, driver):
     """点击帖子的三个点菜单按钮"""
     try:
-        # 查找三个点按钮 - 使用aria-label
+        # 方法1: 使用aria-label定位 (兼容中英文)
         dots_btn = post_element.find_element(By.XPATH,
-            ".//div[@aria-label='可对帖子执行的操作' or @aria-label='Actions for this post' or @aria-label='More']"
+            ".//div[@role='button' and ("
+            "contains(@aria-label,'操作') or "
+            "contains(@aria-label,'Actions') or "
+            "contains(@aria-label,'More') or "
+            "contains(@aria-label,'更多')"
+            ") and @aria-haspopup='menu']"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dots_btn)
         time.sleep(0.5)
@@ -656,21 +624,25 @@ def click_three_dots_menu(post_element, driver):
         time.sleep(2)
         return True
     except Exception:
-        try:
-            # 备用: 通过SVG路径查找
-            dots_btn = post_element.find_element(By.XPATH,
-                ".//svg[contains(@class,'x14rh7hd')]//path[contains(@d,'M458 360a2')]/../.."
-                "/ancestor::div[@role='button']"
-            )
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dots_btn)
-            time.sleep(0.5)
-            dots_btn.click()
-            logger.info("已点击三个点菜单(备用方式)")
-            time.sleep(2)
-            return True
-        except Exception as e:
-            logger.warning(f"未找到三个点菜单: {e}")
-            return False
+        pass
+
+    try:
+        # 方法2: 通过SVG三个点图标的path特征定位
+        dots_btn = post_element.find_element(By.XPATH,
+            ".//div[@role='button' and @aria-haspopup='menu']"
+            "[.//svg//path[contains(@d,'M458 360')]]"
+        )
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dots_btn)
+        time.sleep(0.5)
+        dots_btn.click()
+        logger.info("已点击三个点菜单(SVG方式)")
+        time.sleep(2)
+        return True
+    except Exception:
+        pass
+
+    logger.debug("未找到三个点菜单，跳过交互操作")
+    return False
 
 
 def click_interested(driver):
@@ -797,53 +769,43 @@ def process_single_post(post_element, driver, page_name):
     # 4. 获取帖子完整内容
     content = get_full_post_content(post_element, driver)
 
-    # 5. 提取图片URL
-    image_urls = extract_image_urls(post_element)
-
-    # 6. 跳过无文本且无图片的帖子
-    has_text = content and len(content.strip()) >= 10
-    has_images = len(image_urls) > 0
-
-    if not has_text and not has_images:
-        logger.warning(f"帖子 {post_id} 无文本且无图片，跳过")
+    # 5. 跳过无文本的帖子（纯图片/视频帖无法用文本AI分析）
+    if not content or len(content.strip()) < 10:
+        logger.info(f"帖子 {post_id} 无文本内容，跳过")
         return None
 
-    if not has_text:
-        logger.info(f"帖子 {post_id} 无文本但有{len(image_urls)}张图片，使用视觉AI分析")
-
-    # 7. 提取元数据
+    # 6. 提取元数据
     post_url = extract_post_url(post_element)
     author_name, author_id, author_profile_url = extract_author_info(post_element)
     post_time = extract_post_time(post_element)
 
-    update_status(last_post_content=content[:200] if content else f"[图片帖子 {len(image_urls)}张]")
-    logger.info(f"帖子内容: {content[:100] if content else '[纯图片]'}... 图片: {len(image_urls)}张")
+    update_status(last_post_content=content[:200])
+    logger.info(f"帖子内容: {content[:100]}...")
 
-    # 8. 同步AI分析 - 有图片用视觉模型，否则用文本模型
+    # 7. 同步AI分析
     update_status(last_action=f"AI分析帖子 {post_id}")
-    logger.info(f"开始AI分析帖子 {post_id} ({'视觉模型' if has_images else '文本模型'})...")
-    is_target, ai_response = analyze_post(content or "", image_urls if has_images else None)
+    logger.info(f"开始AI分析帖子 {post_id}...")
+    is_target, ai_response = analyze_post(content)
     logger.info(f"AI分析结果: {'目标客户' if is_target else '非目标客户'}")
 
-    # 9. 保存到数据库
+    # 8. 保存到数据库
     post_data = {
         "post_id": post_id,
         "post_url": post_url,
         "author_name": author_name,
         "author_id": author_id,
         "author_profile_url": author_profile_url,
-        "content": content or f"[图片帖子] {' '.join(image_urls[:3])}",
+        "content": content,
         "post_time": post_time,
         "source_page": page_name,
         "ai_result": ai_response,
         "is_target": is_target,
-        "image_urls": json.dumps(image_urls) if image_urls else None,
         "action_interested": False,
         "action_not_interested": False,
         "action_liked": False,
     }
 
-    # 8. 交互操作 - 80%概率点击有兴趣/没兴趣
+    # 9. 交互操作 - 80%概率点击有兴趣/没兴趣
     if random.random() < INTEREST_PROBABILITY:
         update_status(last_action=f"点击{'有兴趣' if is_target else '没兴趣'} - {post_id}")
         if click_three_dots_menu(post_element, driver):
@@ -855,14 +817,14 @@ def process_single_post(post_element, driver, page_name):
                     post_data["action_not_interested"] = True
         random_delay()
 
-    # 9. 30%概率点赞
+    # 10. 30%概率点赞
     if random.random() < LIKE_PROBABILITY:
         update_status(last_action=f"点赞 - {post_id}")
         if click_like(post_element, driver):
             post_data["action_liked"] = True
         random_delay()
 
-    # 10. 保存到数据库
+    # 11. 保存到数据库
     saved = save_post(post_data)
     if saved:
         logger.info(f"帖子 {post_id} 已保存到数据库")
