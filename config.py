@@ -48,12 +48,12 @@ MONITOR_PAGES = [
 MAX_POSTS_PER_PAGE = 100  # 每个页面最多刷100个帖子
 INTEREST_PROBABILITY = 0.8  # 80%概率点击有兴趣/没兴趣
 LIKE_PROBABILITY = 0.3  # 30%概率点赞
-SCROLL_WAIT_MIN = 2  # 滚动后最小等待时间(秒)
-SCROLL_WAIT_MAX = 5  # 滚动后最大等待时间(秒)
-ACTION_WAIT_MIN = 1  # 操作间最小等待时间(秒)
-ACTION_WAIT_MAX = 3  # 操作间最大等待时间(秒)
-POST_LOAD_TIMEOUT = 15  # 帖子加载超时(秒)
-INTEREST_CLICK_WAIT = 3  # 点击有兴趣后等待时间(秒)
+SCROLL_WAIT_MIN = 1  # 滚动后最小等待时间(秒)
+SCROLL_WAIT_MAX = 3  # 滚动后最大等待时间(秒)
+ACTION_WAIT_MIN = 0.5  # 操作间最小等待时间(秒)
+ACTION_WAIT_MAX = 2  # 操作间最大等待时间(秒)
+POST_LOAD_TIMEOUT = 10  # 帖子加载超时(秒)
+INTEREST_CLICK_WAIT = 1.5  # 点击有兴趣后等待时间(秒)
 
 # ============ 反检测配置 ============
 USER_AGENTS = [

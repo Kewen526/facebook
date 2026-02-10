@@ -234,21 +234,21 @@ def open_all_tabs(driver):
 
     # 第一个标签页 - 首页 (当前标签)
     driver.get(MONITOR_PAGES[0]["url"])
-    time.sleep(5)
+    time.sleep(3)
     logger.info(f"标签页1: {MONITOR_PAGES[0]['label']} 已打开")
 
     # 第二个标签页 - 小组
     driver.execute_script("window.open('');")
     driver.switch_to.window(driver.window_handles[1])
     driver.get(MONITOR_PAGES[1]["url"])
-    time.sleep(5)
+    time.sleep(3)
     logger.info(f"标签页2: {MONITOR_PAGES[1]['label']} 已打开")
 
     # 第三个标签页 - 搜索
     driver.execute_script("window.open('');")
     driver.switch_to.window(driver.window_handles[2])
     driver.get(MONITOR_PAGES[2]["url"])
-    time.sleep(5)
+    time.sleep(3)
     logger.info(f"标签页3: {MONITOR_PAGES[2]['label']} 已打开")
 
     # 切回第一个标签页
@@ -261,7 +261,7 @@ def switch_to_tab(driver, tab_index):
     handles = driver.window_handles
     if tab_index < len(handles):
         driver.switch_to.window(handles[tab_index])
-        time.sleep(2)
+        time.sleep(1)
         logger.info(f"已切换到标签页 {tab_index + 1}: {MONITOR_PAGES[tab_index]['label']}")
         return True
     logger.error(f"标签页 {tab_index} 不存在")
@@ -281,7 +281,7 @@ def refresh_page(driver, page_config, tab_index):
             if scroll_pos < 100:
                 # 页面已在顶部，可能已自动刷新
                 logger.info("首页可能已自动刷新，跳过点击按钮")
-                time.sleep(2)
+                time.sleep(1)
                 return True
 
             # 点击首页按钮 (Home SVG icon)
@@ -293,13 +293,13 @@ def refresh_page(driver, page_config, tab_index):
                 )
                 home_btn.click()
                 logger.info("已点击首页按钮")
-                time.sleep(4)
+                time.sleep(2)
                 return True
             except Exception:
                 # 备用方案: 直接导航
                 logger.warning("未找到首页按钮，使用导航刷新")
                 driver.get(page_config["url"])
-                time.sleep(4)
+                time.sleep(2)
                 return True
 
         elif refresh_type == "groups_link":
@@ -312,25 +312,25 @@ def refresh_page(driver, page_config, tab_index):
                 )
                 groups_link.click()
                 logger.info("已点击小组链接")
-                time.sleep(4)
+                time.sleep(2)
                 return True
             except Exception:
                 logger.warning("未找到小组链接，使用导航刷新")
                 driver.get(page_config["url"])
-                time.sleep(4)
+                time.sleep(2)
                 return True
 
         elif refresh_type == "search_refilter":
             # 搜索页面 - 重新导航刷新
             driver.get(page_config["url"])
             logger.info("搜索页面已重新加载")
-            time.sleep(5)
+            time.sleep(3)
             return True
 
     except Exception as e:
         logger.error(f"刷新页面失败: {e}")
         driver.get(page_config["url"])
-        time.sleep(5)
+        time.sleep(3)
         return True
 
 
@@ -511,9 +511,9 @@ def get_full_post_content(post_element, driver):
             for btn in expand_btns:
                 try:
                     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                     btn.click()
-                    time.sleep(1.5)
+                    time.sleep(0.8)
                     break
                 except Exception:
                     continue
@@ -605,6 +605,78 @@ def get_full_post_content(post_element, driver):
         return ""
 
 
+def _is_junk_content(text):
+    """检查内容是否是无实质意义的垃圾内容（纯标点/表情/链接等）"""
+    if not text:
+        return True
+    # 移除URL链接
+    cleaned = re.sub(r'https?://\S+', '', text)
+    # 移除表情符号（emoji）
+    cleaned = re.sub(r'[\U00010000-\U0010ffff]', '', cleaned)
+    # 移除标点符号和空白
+    cleaned = re.sub(r'[\s\.,!?;:·…\-_=+\[\](){}|/\\@#$%^&*~`\'"<>。，！？、；：""''【】（）《》]+', '', cleaned)
+    # 如果清理后剩余内容不足10个字符，认为是垃圾内容
+    return len(cleaned) < 10
+
+
+def _is_non_business_content(text):
+    """检查内容是否明显与代发业务无关（交友/征婚/社交等）"""
+    if not text:
+        return False
+    text_lower = text.lower()
+    # 交友/征婚/社交关键词
+    dating_patterns = [
+        r'looking for .{0,20}(partner|relationship|love|husband|wife|boyfriend|girlfriend|soulmate|companion)',
+        r'(single|divorced).{0,30}(looking|searching|seeking)',
+        r'寻找.{0,10}(伴侣|对象|另一半|男友|女友|老公|老婆)',
+        r'(dating|hookup|romance|marry|marriage)',
+        r'(征婚|相亲|脱单|找对象)',
+    ]
+    for pattern in dating_patterns:
+        if re.search(pattern, text_lower):
+            return True
+    return False
+
+
+def _clean_content_for_ai(content, author_name=None):
+    """清洗帖子内容：移除小组名称、作者名等非正文信息"""
+    if not content:
+        return content
+
+    lines = content.split('\n')
+    cleaned_lines = []
+
+    # 已知的小组名称/页面标题关键词模式（这些出现在正文开头通常是小组名或用户名）
+    group_title_patterns = [
+        r'^.{0,60}(代发|代购|Dropshipping|Shopify|采购代理|供应商|sourcing|fulfillment|ecommerce)',
+        r'^.{0,60}(1688|阿里巴巴|alibaba|Global Traders)',
+    ]
+
+    for i, line in enumerate(lines):
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
+
+        # 跳过第一行如果匹配小组名/页面标题模式
+        if i == 0:
+            is_group_title = False
+            for pattern in group_title_patterns:
+                if re.search(pattern, line_stripped, re.IGNORECASE):
+                    is_group_title = True
+                    break
+            if is_group_title:
+                logger.debug(f"移除疑似小组名/标题: {line_stripped[:50]}")
+                continue
+
+        # 跳过作者名行
+        if author_name and line_stripped == author_name:
+            continue
+
+        cleaned_lines.append(line_stripped)
+
+    return '\n'.join(cleaned_lines).strip()
+
+
 def click_three_dots_menu(post_element, driver):
     """点击帖子的三个点菜单按钮"""
     try:
@@ -618,10 +690,10 @@ def click_three_dots_menu(post_element, driver):
             ") and @aria-haspopup='menu']"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dots_btn)
-        time.sleep(0.5)
+        time.sleep(0.3)
         dots_btn.click()
         logger.info("已点击三个点菜单")
-        time.sleep(2)
+        time.sleep(1)
         return True
     except Exception:
         pass
@@ -633,10 +705,10 @@ def click_three_dots_menu(post_element, driver):
             "[.//svg//path[contains(@d,'M458 360')]]"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dots_btn)
-        time.sleep(0.5)
+        time.sleep(0.3)
         dots_btn.click()
         logger.info("已点击三个点菜单(SVG方式)")
-        time.sleep(2)
+        time.sleep(1)
         return True
     except Exception:
         pass
@@ -699,10 +771,10 @@ def click_like(post_element, driver):
             ".//div[@aria-label='赞' or @aria-label='Like'][@role='button']"
         )
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", like_btn)
-        time.sleep(0.5)
+        time.sleep(0.3)
         like_btn.click()
         logger.info("已点赞")
-        time.sleep(2)
+        time.sleep(1)
         return True
     except Exception as e:
         logger.warning(f"点赞失败: {e}")
@@ -762,7 +834,7 @@ def process_single_post(post_element, driver, page_name):
     # 3. 滚动到帖子可见
     try:
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", post_element)
-        time.sleep(1)
+        time.sleep(0.5)
     except Exception:
         pass
 
@@ -779,13 +851,29 @@ def process_single_post(post_element, driver, page_name):
     author_name, author_id, author_profile_url = extract_author_info(post_element)
     post_time = extract_post_time(post_element)
 
-    update_status(last_post_content=content[:200])
-    logger.info(f"帖子内容: {content[:100]}...")
+    # 6.1 预过滤：纯标点/表情/链接等垃圾内容直接跳过
+    if _is_junk_content(content):
+        logger.info(f"帖子 {post_id} 内容无实质文字，跳过")
+        return None
 
-    # 7. 同步AI分析
+    # 6.2 预过滤：交友/征婚等明显非商业帖子直接跳过
+    if _is_non_business_content(content):
+        logger.info(f"帖子 {post_id} 为交友/社交帖，跳过")
+        return None
+
+    # 6.3 清洗内容：移除小组名称、作者名等非正文信息
+    clean_content = _clean_content_for_ai(content, author_name)
+    if not clean_content or len(clean_content.strip()) < 10:
+        logger.info(f"帖子 {post_id} 清洗后无实质内容，跳过")
+        return None
+
+    update_status(last_post_content=content[:200])
+    logger.info(f"帖子内容: {clean_content[:100]}...")
+
+    # 7. 同步AI分析（使用清洗后的内容）
     update_status(last_action=f"AI分析帖子 {post_id}")
     logger.info(f"开始AI分析帖子 {post_id}...")
-    is_target, ai_response = analyze_post(content)
+    is_target, ai_response = analyze_post(clean_content)
     logger.info(f"AI分析结果: {'目标客户' if is_target else '非目标客户'}")
 
     # 8. 保存到数据库
@@ -1010,14 +1098,14 @@ def start_monitor():
 
                 # 页面间随机延迟
                 if i < len(MONITOR_PAGES) - 1:
-                    delay = random.uniform(3, 8)
+                    delay = random.uniform(2, 4)
                     logger.info(f"等待 {delay:.1f}s 后切换到下一个页面...")
                     time.sleep(delay)
 
             logger.info(f"\n第 {round_count} 轮完成，共处理 {total_new} 个新帖子")
 
             # 轮次间等待
-            wait_time = random.uniform(10, 20)
+            wait_time = random.uniform(5, 10)
             logger.info(f"等待 {wait_time:.1f}s 后开始下一轮...")
             time.sleep(wait_time)
 
