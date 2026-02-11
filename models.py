@@ -6,6 +6,77 @@ from config import DATABASE_URL
 Base = declarative_base()
 
 
+class WhatsAppAccount(Base):
+    """WhatsApp账号表"""
+    __tablename__ = 'whatsapp_accounts'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    phone_number = Column(String(32), unique=True, nullable=False)
+    enabled = Column(Boolean, default=True)
+    usage_count = Column(Integer, default=0)  # 被用于私信提示词的次数
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    sender_accounts = relationship("Account", back_populates="whatsapp_account")
+
+    __table_args__ = (
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "phone_number": self.phone_number,
+            "enabled": self.enabled,
+            "usage_count": self.usage_count,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Account(Base):
+    """账号表 - 统一管理监控和发送账号"""
+    __tablename__ = 'accounts'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(256), unique=True, nullable=False)  # 账号名称/邮箱
+    account_type = Column(String(32), nullable=False, index=True)  # "monitor" 或 "sender"
+    cookie_url = Column(Text)  # Cookie JSON文件URL
+    cookie_status = Column(String(32), default='unknown')  # "valid" / "invalid" / "unknown"
+    status = Column(String(32), default='active')  # "active" / "banned" / "paused"
+    whatsapp_account_id = Column(Integer, ForeignKey('whatsapp_accounts.id'), nullable=True)  # 仅sender使用
+    last_task_at = Column(DateTime, nullable=True)  # 上次发送时间(频率限制用)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    whatsapp_account = relationship("WhatsAppAccount", back_populates="sender_accounts")
+    send_tasks = relationship("SendTask", back_populates="account", lazy="dynamic")
+
+    __table_args__ = (
+        Index('idx_account_type_enabled', 'account_type', 'enabled'),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "account_type": self.account_type,
+            "cookie_url": self.cookie_url,
+            "cookie_status": self.cookie_status,
+            "status": self.status,
+            "whatsapp_account_id": self.whatsapp_account_id,
+            "whatsapp_phone": self.whatsapp_account.phone_number if self.whatsapp_account else None,
+            "last_task_at": self.last_task_at.isoformat() if self.last_task_at else None,
+            "enabled": self.enabled,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class Post(Base):
     """帖子表 - 存储采集到的Facebook帖子"""
     __tablename__ = 'posts'
@@ -25,10 +96,12 @@ class Post(Base):
     action_interested = Column(Boolean, default=False)  # 是否点了有兴趣
     action_not_interested = Column(Boolean, default=False)  # 是否点了没兴趣
     action_liked = Column(Boolean, default=False)  # 是否点了赞
+    discovered_by = Column(String(256), nullable=True, index=True)  # 哪个监控账号发现的
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # 采集时间
 
     # 关联: 一个帖子可以有多个操作记录
     actions = relationship("PostAction", back_populates="post", lazy="dynamic")
+    send_tasks = relationship("SendTask", back_populates="post", lazy="dynamic")
 
     __table_args__ = (
         Index('idx_source_created', 'source_page', 'created_at'),
@@ -53,21 +126,23 @@ class Post(Base):
             "action_interested": self.action_interested,
             "action_not_interested": self.action_not_interested,
             "action_liked": self.action_liked,
+            "discovered_by": self.discovered_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "actions": [a.to_dict() for a in self.actions] if self.actions else [],
         }
 
 
 class PostAction(Base):
-    """帖子操作表 - 为未来多账号发送设计"""
+    """帖子操作表 - 记录对帖子的操作"""
     __tablename__ = 'post_actions'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     post_id = Column(Integer, ForeignKey('posts.id'), nullable=False, index=True)
-    account_id = Column(String(256), index=True)  # 发送账号
+    account_id = Column(String(256), index=True)  # 发送账号名称
     action_type = Column(String(32))  # 操作类型: message / friend_request / comment
     action_status = Column(String(32), default='pending')  # pending / success / failed
     action_detail = Column(Text)  # 操作详情/错误信息
+    send_task_id = Column(Integer, ForeignKey('send_tasks.id'), nullable=True)  # 关联发送任务
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
@@ -87,8 +162,51 @@ class PostAction(Base):
             "action_type": self.action_type,
             "action_status": self.action_status,
             "action_detail": self.action_detail,
+            "send_task_id": self.send_task_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class SendTask(Base):
+    """发送任务表 - 管理发送队列"""
+    __tablename__ = 'send_tasks'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    post_id = Column(Integer, ForeignKey('posts.id'), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    task_type = Column(String(32), nullable=False)  # "comment" / "dm" / "add_friend"
+    status = Column(String(32), default='pending')  # "pending" / "in_progress" / "completed" / "failed" / "skipped"
+    error_message = Column(Text, nullable=True)
+    generated_text = Column(Text, nullable=True)  # AI生成的评论/私信内容
+    scheduled_at = Column(DateTime, nullable=True)  # 最早执行时间
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    post = relationship("Post", back_populates="send_tasks")
+    account = relationship("Account", back_populates="send_tasks")
+
+    __table_args__ = (
+        Index('idx_task_status_account', 'status', 'account_id'),
+        Index('idx_task_post_account', 'post_id', 'account_id'),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "post_id": self.post_id,
+            "account_id": self.account_id,
+            "account_name": self.account.name if self.account else None,
+            "task_type": self.task_type,
+            "status": self.status,
+            "error_message": self.error_message,
+            "generated_text": self.generated_text,
+            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
@@ -98,6 +216,7 @@ class MonitorLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     page_type = Column(String(32))  # home / groups / search
+    account_name = Column(String(256), nullable=True)  # 哪个监控账号
     posts_scanned = Column(Integer, default=0)
     posts_new = Column(Integer, default=0)
     started_at = Column(DateTime)
@@ -111,6 +230,7 @@ class MonitorLog(Base):
         return {
             "id": self.id,
             "page_type": self.page_type,
+            "account_name": self.account_name,
             "posts_scanned": self.posts_scanned,
             "posts_new": self.posts_new,
             "started_at": self.started_at.isoformat() if self.started_at else None,

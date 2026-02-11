@@ -1,5 +1,8 @@
 import os
+import json
 import random
+import base64
+from datetime import datetime as _dt
 from urllib.parse import quote_plus as _qp
 
 # ============ 数据库配置 ============
@@ -22,6 +25,31 @@ COOKIES_DIR = os.path.join(os.path.expanduser("~"), "fb_cookies")
 ZHIPU_KEY_API = "http://47.95.157.46:8520/api/zhipuai_key"
 ZHIPU_MODEL = "glm-z1-flash"
 
+# ============ 发送配置 ============
+SEND_COOLDOWN_SECONDS = 600  # 每个发送账号任务间隔10分钟
+SEARCH_KEYWORD = "dropshipping"  # 搜索关键词
+
+
+def build_fb_today_url(keyword=None):
+    """生成今天的Facebook搜索URL"""
+    keyword = keyword or SEARCH_KEYWORD
+    today = _dt.now()
+    time_args = {
+        "start_year": str(today.year),
+        "start_month": f"{today.year}-{today.month}",
+        "end_year": str(today.year),
+        "end_month": f"{today.year}-{today.month}",
+        "start_day": f"{today.year}-{today.month}-{today.day}",
+        "end_day": f"{today.year}-{today.month}-{today.day}"
+    }
+    filters = {
+        "recent_posts:0": json.dumps({"name": "recent_posts", "args": ""}),
+        "rp_creation_time:0": json.dumps({"name": "creation_time", "args": json.dumps(time_args)})
+    }
+    filters_b64 = base64.b64encode(json.dumps(filters, separators=(',', ':')).encode()).decode()
+    return f"https://www.facebook.com/search/posts?q={keyword}&filters={filters_b64}"
+
+
 # ============ 监控页面配置 ============
 MONITOR_PAGES = [
     {
@@ -39,7 +67,7 @@ MONITOR_PAGES = [
     {
         "name": "search",
         "label": "搜索帖子",
-        "url": "https://www.facebook.com/search/posts?q=Looking&filters=eyJyZWNlbnRfcG9zdHM6MCI6IntcIm5hbWVcIjpcInJlY2VudF9wb3N0c1wiLFwiYXJnc1wiOlwiXCJ9IiwicnBfY3JlYXRpb25fdGltZTowIjoie1wibmFtZVwiOlwiY3JlYXRpb25fdGltZVwiLFwiYXJnc1wiOlwie1xcXCJzdGFydF95ZWFyXFxcIjpcXFwiMjAyNlxcXCIsXFxcInN0YXJ0X21vbnRoXFxcIjpcXFwiMjAyNi0xXFxcIixcXFwiZW5kX3llYXJcXFwiOlxcXCIyMDI2XFxcIixcXFwiZW5kX21vbnRoXFxcIjpcXFwiMjAyNi0xMlxcXCIsXFxcInN0YXJ0X2RheVxcXCI6XFxcIjIwMjYtMS0xXFxcIixcXFwiZW5kX2RheVxcXCI6XFxcIjIwMjYtMTItMzFcXFwifVwifSJ9",
+        "url": build_fb_today_url(),  # 动态生成当日搜索URL
         "refresh_type": "search_refilter",  # 重新筛选刷新
     },
 ]

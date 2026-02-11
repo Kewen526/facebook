@@ -50,6 +50,9 @@ PROMPT_TEMPLATE = """请对以下帖子做角色与需求识别，判断发帖�
 - 产品广告/产品展示帖（只展示产品参数、价格，无采购意图）
 - ⚠️ **卖家在寻找客户**："寻找更多客户" / "looking for customers" / "扩大规模" / "expand business" → 这是卖家行为，不是买家！
 - 提供WhatsApp/微信等联系方式招揽生意 → 卖家
+- 提供批量/批发销售："bulk quantity" / "wholesale available" / "retail and wholesale" / "available in wholesale"
+- 品牌名称+联系方式组合：通常是卖家在推广自己的品牌
+- 邀请联系购买："DM for orders" / "contact for pricing" / "direct message for bulk" / "please contact wholesalers"
 
 ❌ **与代发业务完全无关的帖子 = 判"否"**：
 - 交友/征婚/社交帖："looking for partner/relationship" / "寻找伴侣"
@@ -128,7 +131,25 @@ PROMPT_TEMPLATE = """请对以下帖子做角色与需求识别，判断发帖�
 1. 角色判定：非商业帖 - 这是一条交友/征婚帖
 2. 关键表达匹配："looking for a good partner" 指的是寻找伴侣，不是商业合作伙伴
 3. 需求明确性：与中国采购代发完全无关
-4. 综合结论：交友帖，不是目标客户"""
+4. 综合结论：交友帖，不是目标客户
+
+示例7（否 - 批发卖家）：
+输入：Quality jacket's hoodies available in wholesale and retail shipping worldwide
+判定结果：否
+判定依据：
+1. 角色判定：卖家/供应商 - 在宣传自己的服装产品
+2. 关键表达匹配："available" + "wholesale and retail" + "shipping worldwide" = 产品供应商广告
+3. 需求明确性：发帖人是在出售商品，而非寻找供应商
+4. 综合结论：批发卖家广告帖，不是目标客户
+
+示例8（否 - 鞋类卖家/零售商）：
+输入：DRIECT MESSAGE FOR BULK QUANTITY. !!! Nagina Footwear. What's app 0346-84 786 92 Please Contact wholesalers or Shopkeepers.
+判定结果：否
+判定依据：
+1. 角色判定：卖家/供应商 - 在推广自己的鞋类产品并招揽批量订单
+2. 关键表达匹配："DIRECT MESSAGE FOR BULK QUANTITY" + 品牌名 + WhatsApp联系方式 = 典型供应商招商话术
+3. 需求明确性：发帖人是在销售产品，提供WhatsApp以接收订单
+4. 综合结论：产品卖家推广帖，不是目标客户"""
 
 
 def get_zhipu_keys():
@@ -277,3 +298,75 @@ def analyze_post(post_content: str) -> tuple:
     response = analyze_with_ai(prompt)
     is_target = parse_analysis_result(response)
     return is_target, response
+
+
+# ============ 内容生成提示词 ============
+
+COMMENT_PROMPT = """你是一位专业的跨境电商供应商助手，专门生成Facebook评论话术。
+
+请生成1条Facebook评论：
+- 简短自然，像真人在评论，不像广告
+- 要让客户看到后有想回复或私信我的欲望
+- 结尾引导客户回复我或私信我，例如："DM me if interested!" / "Let's work together!" / "Feel free to message me!"
+- 不要问客户卖什么产品或针对什么市场
+- 强调：代发货、无最低起订量、价格有竞争力、快速发货
+- 可以提到：ERP系统、自动上传追踪号、售后服务、品牌定制包装
+- 不需要加WhatsApp号码
+- 不超过50字
+
+直接输出1条评论，不需要解释。"""
+
+DM_WITH_WHATSAPP_PROMPT = """你是一位专业的跨境电商供应商助手，专门生成Facebook私信话术。
+
+我的WhatsApp账号：{whatsapp_number}
+
+请生成1条Facebook私信：
+- 友好自然，像真人发送，不像群发广告
+- 要让客户看到后有强烈想回复的欲望
+- 用提问句或悬念结尾，引发互动
+- 强调：代发货代理、工厂价格、无最低起订量、快速全球发货
+- 可以提到：ERP系统对接Shopify、自动上传追踪号、售后保障、品牌定制
+- 结尾必须加：This is my WhatsApp. {whatsapp_number}
+- 不超过100字
+
+直接输出1条私信，不需要解释。"""
+
+DM_WITHOUT_WHATSAPP_PROMPT = """你是一位专业的跨境电商供应商助手，专门生成Facebook私信话术。
+
+请生成1条Facebook私信：
+- 友好自然，像真人发送，不像群发广告
+- 要让客户看到后有强烈想回复的欲望
+- 用提问句或悬念结尾，引发互动
+- 强调：代发货代理、工厂价格、无最低起订量、快速全球发货
+- 可以提到：ERP系统对接Shopify、自动上传追踪号、售后保障、品牌定制
+- 不超过80字
+
+直接输出1条私信，不需要解释。"""
+
+
+def generate_comment(post_content: str) -> Optional[str]:
+    """生成评论内容"""
+    logger.info("生成评论内容...")
+    result = analyze_with_ai(COMMENT_PROMPT)
+    if result and "判定结果" not in result:
+        return result.strip()
+    return result
+
+
+def generate_dm_with_whatsapp(post_content: str, whatsapp_number: str) -> Optional[str]:
+    """生成带WhatsApp的私信内容"""
+    logger.info(f"生成私信内容 (WhatsApp: {whatsapp_number})...")
+    prompt = DM_WITH_WHATSAPP_PROMPT.replace("{whatsapp_number}", whatsapp_number)
+    result = analyze_with_ai(prompt)
+    if result and "判定结果" not in result:
+        return result.strip()
+    return result
+
+
+def generate_dm_without_whatsapp(post_content: str) -> Optional[str]:
+    """生成不带WhatsApp的私信内容"""
+    logger.info("生成私信内容 (无WhatsApp)...")
+    result = analyze_with_ai(DM_WITHOUT_WHATSAPP_PROMPT)
+    if result and "判定结果" not in result:
+        return result.strip()
+    return result

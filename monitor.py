@@ -21,14 +21,14 @@ from config import (
     SCROLL_WAIT_MIN, SCROLL_WAIT_MAX,
     ACTION_WAIT_MIN, ACTION_WAIT_MAX,
     POST_LOAD_TIMEOUT, INTEREST_CLICK_WAIT,
-    random_delay,
+    random_delay, build_fb_today_url, SEARCH_KEYWORD,
 )
-from models import is_post_exists, save_post, update_post_action, MonitorLog, get_session
+from models import is_post_exists, save_post, update_post_action, MonitorLog, get_session, Account
 from ai_analyzer import analyze_post
 
 logger = logging.getLogger(__name__)
 
-# 全局状态 - 供Flask API查询
+# 全局状态 - 供Flask API查询（支持多账号）
 monitor_status = {
     "running": False,
     "current_page": "",
@@ -39,7 +39,13 @@ monitor_status = {
     "last_post_content": "",
     "last_action": "",
     "error": "",
+    "accounts": {},  # 每个监控账号的状态
 }
+
+# 跟踪每个监控线程
+_monitor_threads = {}
+# 跟踪搜索页面最后使用的URL（每个账号独立）
+_last_search_urls = {}
 
 
 def update_status(**kwargs):
@@ -47,12 +53,24 @@ def update_status(**kwargs):
     monitor_status.update(kwargs)
 
 
-def download_cookies():
+def update_account_status(account_name, **kwargs):
+    """更新指定账号的监控状态"""
+    if account_name not in monitor_status["accounts"]:
+        monitor_status["accounts"][account_name] = {
+            "running": False, "current_page": "", "round_count": 0,
+            "posts_processed": 0, "last_action": "", "error": "",
+        }
+    monitor_status["accounts"][account_name].update(kwargs)
+
+
+def download_cookies(cookie_url=None, account_name=None):
     """从URL下载cookie文件"""
-    logger.info(f"下载cookie文件: {COOKIE_URL}")
+    url = cookie_url or COOKIE_URL
+    file_name = f"{account_name}_cookies.json" if account_name else "monitor_cookies.json"
+    logger.info(f"下载cookie文件: {url}")
     try:
         os.makedirs(COOKIES_DIR, exist_ok=True)
-        cookie_file_path = os.path.join(COOKIES_DIR, "monitor_cookies.json")
+        cookie_file_path = os.path.join(COOKIES_DIR, file_name)
 
         headers = {
             'User-Agent': random.choice(USER_AGENTS),
@@ -60,7 +78,7 @@ def download_cookies():
         }
         proxies = {'http': None, 'https': None}
 
-        response = requests.get(COOKIE_URL, headers=headers, proxies=proxies, timeout=30)
+        response = requests.get(url, headers=headers, proxies=proxies, timeout=30)
         if response.status_code != 200:
             logger.error(f"下载失败，HTTP状态码: {response.status_code}")
             return None
@@ -228,9 +246,15 @@ def load_cookies(driver, cookies_file):
         return False
 
 
-def open_all_tabs(driver):
+def open_all_tabs(driver, account_name=None):
     """打开三个监控页面的标签页"""
     logger.info("打开三个监控标签页...")
+
+    # 生成当日搜索URL
+    search_url = build_fb_today_url(SEARCH_KEYWORD)
+    key = account_name or "_default"
+    _last_search_urls[key] = search_url
+    logger.info(f"当日搜索URL已生成: {search_url[:80]}...")
 
     # 第一个标签页 - 首页 (当前标签)
     driver.get(MONITOR_PAGES[0]["url"])
@@ -244,12 +268,12 @@ def open_all_tabs(driver):
     time.sleep(3)
     logger.info(f"标签页2: {MONITOR_PAGES[1]['label']} 已打开")
 
-    # 第三个标签页 - 搜索
+    # 第三个标签页 - 搜索（使用动态URL）
     driver.execute_script("window.open('');")
     driver.switch_to.window(driver.window_handles[2])
-    driver.get(MONITOR_PAGES[2]["url"])
+    driver.get(search_url)
     time.sleep(3)
-    logger.info(f"标签页3: {MONITOR_PAGES[2]['label']} 已打开")
+    logger.info(f"标签页3: {MONITOR_PAGES[2]['label']} 已打开 (动态URL)")
 
     # 切回第一个标签页
     driver.switch_to.window(driver.window_handles[0])
@@ -268,7 +292,7 @@ def switch_to_tab(driver, tab_index):
     return False
 
 
-def refresh_page(driver, page_config, tab_index):
+def refresh_page(driver, page_config, tab_index, account_name=None):
     """根据页面类型执行刷新操作"""
     refresh_type = page_config["refresh_type"]
     logger.info(f"刷新页面: {page_config['label']} (类型: {refresh_type})")
@@ -321,8 +345,14 @@ def refresh_page(driver, page_config, tab_index):
                 return True
 
         elif refresh_type == "search_refilter":
-            # 搜索页面 - 重新导航刷新
-            driver.get(page_config["url"])
+            # 搜索页面 - 检查是否需要更新URL（日期变化）
+            key = account_name or "_default"
+            new_url = build_fb_today_url(SEARCH_KEYWORD)
+            old_url = _last_search_urls.get(key, "")
+            if new_url != old_url:
+                logger.info("搜索URL已变化（日期更新），重新加载...")
+                _last_search_urls[key] = new_url
+            driver.get(new_url)
             logger.info("搜索页面已重新加载")
             time.sleep(3)
             return True
@@ -677,8 +707,38 @@ def _clean_content_for_ai(content, author_name=None):
     return '\n'.join(cleaned_lines).strip()
 
 
+def dismiss_overlay(driver):
+    """自动检测并关闭阻挡操作的遮罩层/弹窗"""
+    try:
+        close_selectors = [
+            # 精确匹配用户提供的HTML结构
+            "//div[@role='none']//span[contains(@class,'x1lliihq') and (text()='关闭' or text()='Close')]",
+            # aria-label方式
+            "//div[@aria-label='关闭' or @aria-label='Close'][@role='button']",
+            # 通用关闭按钮
+            "//div[@role='button']//span[text()='关闭' or text()='Close']",
+            "//div[@role='dialog']//div[@aria-label='关闭' or @aria-label='Close']",
+        ]
+        for selector in close_selectors:
+            elements = driver.find_elements(By.XPATH, selector)
+            for elem in elements:
+                try:
+                    if elem.is_displayed():
+                        elem.click()
+                        time.sleep(1)
+                        logger.info("已自动关闭遮罩层/弹窗")
+                        return True
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return False
+
+
 def click_three_dots_menu(post_element, driver):
     """点击帖子的三个点菜单按钮"""
+    # 先检查并关闭可能存在的遮罩层
+    dismiss_overlay(driver)
     try:
         # 方法1: 使用aria-label定位 (兼容中英文)
         dots_btn = post_element.find_element(By.XPATH,
@@ -815,7 +875,7 @@ def wait_for_posts_load(driver, timeout=None):
         return False
 
 
-def process_single_post(post_element, driver, page_name):
+def process_single_post(post_element, driver, page_name, account_name=None):
     """处理单个帖子 - 同步流程"""
     # 1. 提取帖子ID
     post_id = extract_post_id(post_element)
@@ -891,6 +951,7 @@ def process_single_post(post_element, driver, page_name):
         "action_interested": False,
         "action_not_interested": False,
         "action_liked": False,
+        "discovered_by": account_name,
     }
 
     # 9. 交互操作 - 80%概率点击有兴趣/没兴趣
@@ -916,13 +977,21 @@ def process_single_post(post_element, driver, page_name):
     saved = save_post(post_data)
     if saved:
         logger.info(f"帖子 {post_id} 已保存到数据库")
+        # 如果是目标客户，自动生成发送任务
+        if is_target:
+            try:
+                from task_queue import generate_tasks_for_post
+                generate_tasks_for_post(saved)
+                logger.info(f"帖子 {post_id} 的发送任务已生成")
+            except Exception as e:
+                logger.warning(f"生成发送任务失败: {e}")
     else:
         logger.error(f"帖子 {post_id} 保存失败")
 
     return saved
 
 
-def monitor_single_page(driver, page_config, tab_index):
+def monitor_single_page(driver, page_config, tab_index, account_name=None):
     """监控单个页面 - 最多处理MAX_POSTS_PER_PAGE个帖子"""
     page_name = page_config["name"]
     page_label = page_config["label"]
@@ -932,13 +1001,15 @@ def monitor_single_page(driver, page_config, tab_index):
         current_page_label=page_label,
         posts_processed=0,
     )
+    if account_name:
+        update_account_status(account_name, current_page=page_name)
 
     # 切换到对应标签页
     if not switch_to_tab(driver, tab_index):
         return 0
 
     # 刷新页面
-    refresh_page(driver, page_config, tab_index)
+    refresh_page(driver, page_config, tab_index, account_name=account_name)
 
     # 等待帖子加载
     if not wait_for_posts_load(driver):
@@ -949,6 +1020,7 @@ def monitor_single_page(driver, page_config, tab_index):
     session = get_session()
     log = MonitorLog(
         page_type=page_name,
+        account_name=account_name,
         started_at=datetime.now(timezone.utc),
     )
     session.add(log)
@@ -994,7 +1066,7 @@ def monitor_single_page(driver, page_config, tab_index):
                     posts_scanned += 1
                     update_status(posts_processed=posts_processed, posts_total=posts_scanned)
 
-                    result = process_single_post(post, driver, page_name)
+                    result = process_single_post(post, driver, page_name, account_name=account_name)
                     if result:
                         posts_processed += 1
                         found_new = True
@@ -1015,6 +1087,9 @@ def monitor_single_page(driver, page_config, tab_index):
             if no_new_posts_count > 3:
                 logger.info("连续多次无新帖子，结束当前页面")
                 break
+
+            # 滚动前检查并关闭遮罩层
+            dismiss_overlay(driver)
 
             # 滚动加载更多
             logger.info("向下滚动加载更多帖子...")
@@ -1041,86 +1116,116 @@ def monitor_single_page(driver, page_config, tab_index):
     return posts_processed
 
 
-def start_monitor():
-    """启动监控主循环"""
-    update_status(running=True, error="")
+def start_monitor_for_account(account_name, cookie_url):
+    """为指定账号启动监控循环"""
+    update_account_status(account_name, running=True, error="")
 
     # 1. 下载cookies
-    print("[Monitor] 步骤1: 下载Cookie文件...", flush=True)
-    logger.info("步骤1: 下载Cookie文件...")
-    cookies_file = download_cookies()
+    logger.info(f"[{account_name}] 步骤1: 下载Cookie文件...")
+    cookies_file = download_cookies(cookie_url=cookie_url, account_name=account_name)
     if not cookies_file:
-        print("[Monitor] Cookie下载失败!", flush=True)
-        update_status(running=False, error="Cookie下载失败")
+        update_account_status(account_name, running=False, error="Cookie下载失败")
         return
-    print(f"[Monitor] Cookie下载成功: {cookies_file}", flush=True)
 
     # 2. 创建浏览器
-    print("[Monitor] 步骤2: 创建浏览器实例...", flush=True)
-    logger.info("步骤2: 创建浏览器实例...")
+    logger.info(f"[{account_name}] 步骤2: 创建浏览器实例...")
     driver = create_driver()
     if not driver:
-        print("[Monitor] 浏览器创建失败!", flush=True)
-        update_status(running=False, error="浏览器创建失败")
+        update_account_status(account_name, running=False, error="浏览器创建失败")
         return
-    print("[Monitor] 浏览器创建成功!", flush=True)
 
     try:
         # 3. 加载cookies
-        print("[Monitor] 步骤3: 加载Cookie...", flush=True)
-        logger.info("步骤3: 加载Cookie...")
+        logger.info(f"[{account_name}] 步骤3: 加载Cookie...")
         if not load_cookies(driver, cookies_file):
-            update_status(running=False, error="Cookie加载失败")
+            update_account_status(account_name, running=False, error="Cookie加载失败")
             return
 
-        # 4. 打开三个标签页
-        print("[Monitor] 步骤4: 打开三个监控标签页...", flush=True)
-        logger.info("步骤4: 打开三个监控标签页...")
-        open_all_tabs(driver)
+        # 4. 打开三个标签页（使用动态搜索URL）
+        logger.info(f"[{account_name}] 步骤4: 打开三个监控标签页...")
+        open_all_tabs(driver, account_name=account_name)
 
         # 5. 开始循环监控
         round_count = 0
         while monitor_status["running"]:
             round_count += 1
-            update_status(round_count=round_count)
-            logger.info(f"\n{'='*60}")
-            logger.info(f"===== 监控第 {round_count} 轮 =====")
-            logger.info(f"{'='*60}")
+            update_account_status(account_name, round_count=round_count)
+            logger.info(f"\n[{account_name}] ===== 监控第 {round_count} 轮 =====")
 
             total_new = 0
             for i, page_config in enumerate(MONITOR_PAGES):
                 if not monitor_status["running"]:
                     break
 
-                logger.info(f"\n--- 开始监控: {page_config['label']} ---")
-                new_posts = monitor_single_page(driver, page_config, i)
+                # 检查并关闭遮罩层
+                dismiss_overlay(driver)
+
+                logger.info(f"[{account_name}] --- 开始监控: {page_config['label']} ---")
+                new_posts = monitor_single_page(driver, page_config, i, account_name=account_name)
                 total_new += new_posts
 
-                # 页面间随机延迟
                 if i < len(MONITOR_PAGES) - 1:
                     delay = random.uniform(2, 4)
-                    logger.info(f"等待 {delay:.1f}s 后切换到下一个页面...")
                     time.sleep(delay)
 
-            logger.info(f"\n第 {round_count} 轮完成，共处理 {total_new} 个新帖子")
+            update_account_status(account_name, posts_processed=total_new)
+            logger.info(f"[{account_name}] 第 {round_count} 轮完成，共处理 {total_new} 个新帖子")
 
-            # 轮次间等待
             wait_time = random.uniform(5, 10)
-            logger.info(f"等待 {wait_time:.1f}s 后开始下一轮...")
             time.sleep(wait_time)
 
     except KeyboardInterrupt:
-        logger.info("监控被用户中断")
+        logger.info(f"[{account_name}] 监控被用户中断")
     except Exception as e:
-        logger.error(f"监控出错: {e}")
-        update_status(error=str(e))
+        logger.error(f"[{account_name}] 监控出错: {e}")
+        update_account_status(account_name, error=str(e))
     finally:
-        update_status(running=False)
-        logger.info("关闭浏览器...")
+        update_account_status(account_name, running=False)
+        logger.info(f"[{account_name}] 关闭浏览器...")
         try:
             driver.quit()
         except Exception:
             pass
+
+
+def start_monitor():
+    """启动监控主循环（兼容旧的单账号模式，同时支持多账号）"""
+    update_status(running=True, error="")
+
+    # 查询数据库中已启用的monitor账号
+    session = get_session()
+    try:
+        monitor_accounts = session.query(Account).filter(
+            Account.account_type == 'monitor',
+            Account.enabled == True
+        ).all()
+        accounts_list = [(a.name, a.cookie_url) for a in monitor_accounts if a.cookie_url]
+    finally:
+        session.close()
+
+    if accounts_list:
+        # 多账号模式：为每个账号启动独立监控线程
+        logger.info(f"发现 {len(accounts_list)} 个监控账号，启动多账号监控...")
+        for name, cookie_url in accounts_list:
+            t = threading.Thread(
+                target=start_monitor_for_account,
+                args=(name, cookie_url),
+                daemon=True
+            )
+            _monitor_threads[name] = t
+            t.start()
+            time.sleep(5)  # 错开启动时间
+
+        # 主循环等待所有线程
+        try:
+            while monitor_status["running"]:
+                time.sleep(5)
+        except KeyboardInterrupt:
+            monitor_status["running"] = False
+    else:
+        # 兼容模式：使用config中的默认COOKIE_URL
+        logger.info("未找到数据库中的监控账号，使用默认Cookie配置...")
+        start_monitor_for_account("default", COOKIE_URL)
 
 
 def start_monitor_thread():
