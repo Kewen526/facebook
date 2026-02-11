@@ -312,9 +312,9 @@
                             <td><span :style="{ color: acc.cookie_status === 'valid' ? '#42b72a' : '#fa3e3e' }">{{ acc.cookie_status }}</span></td>
                             <td>{{ acc.status }}</td>
                             <td>
-                                <select v-if="acc.account_type === 'sender'" @change="updateAccountWhatsApp(acc, $event.target.value)" style="padding:4px 8px; font-size:12px; border:1px solid #ddd; border-radius:4px;">
+                                <select v-if="acc.account_type === 'sender'" :value="acc.whatsapp_account_id || ''" @change="updateAccountWhatsApp(acc, $event.target.value)" style="padding:4px 8px; font-size:12px; border:1px solid #ddd; border-radius:4px;">
                                     <option value="">无</option>
-                                    <option v-for="wa in whatsappAccounts" :key="wa.id" :value="wa.id" :selected="wa.id === acc.whatsapp_account_id">{{ wa.phone_number }}</option>
+                                    <option v-for="wa in whatsappAccounts" :key="wa.id" :value="wa.id">{{ wa.phone_number }}</option>
                                 </select>
                                 <span v-else style="color:#65676b;">-</span>
                             </td>
@@ -346,11 +346,17 @@
                 <h3>WhatsApp账号列表 ({{ whatsappAccounts.length }})</h3>
                 <table class="mgmt-table">
                     <thead>
-                        <tr><th>号码</th><th>使用次数</th><th>启用</th><th>创建时间</th><th>操作</th></tr>
+                        <tr><th>号码</th><th>关联发送账号</th><th>使用次数</th><th>启用</th><th>创建时间</th><th>操作</th></tr>
                     </thead>
                     <tbody>
                         <tr v-for="wa in whatsappAccounts" :key="wa.id">
                             <td>{{ wa.phone_number }}</td>
+                            <td>
+                                <span v-if="getLinkedAccounts(wa.id).length > 0">
+                                    <span v-for="(acc, idx) in getLinkedAccounts(wa.id)" :key="acc.id" class="badge badge-target" style="margin-right:4px;">{{ acc.name }}</span>
+                                </span>
+                                <span v-else style="color:#65676b; font-size:12px;">未关联</span>
+                            </td>
                             <td>{{ wa.usage_count }}</td>
                             <td><div class="toggle" :class="{ on: wa.enabled }" @click="toggleWhatsApp(wa)"></div></td>
                             <td>{{ formatDate(wa.created_at) }}</td>
@@ -664,6 +670,15 @@ createApp({
         async function loadWhatsApp() {
             const d = await fetchAPI('/api/whatsapp-accounts');
             if (d && d.success) whatsappAccounts.value = d.data;
+            // 同时加载账号用于显示关联关系
+            if (!accounts.value.length) {
+                const a = await fetchAPI('/api/accounts');
+                if (a && a.success) accounts.value = a.data;
+            }
+        }
+
+        function getLinkedAccounts(waId) {
+            return accounts.value.filter(a => a.whatsapp_account_id === waId);
         }
 
         async function loadSendingStatus() {
@@ -817,7 +832,7 @@ createApp({
             loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard,
             startMonitor, stopMonitor, startSending, stopSending, refreshData, openPostDetail,
             createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie,
-            createWhatsApp, deleteWhatsApp, toggleWhatsApp,
+            createWhatsApp, deleteWhatsApp, toggleWhatsApp, getLinkedAccounts,
             sourceLabel, sourceColor, actionTypeLabel, taskTypeLabel, formatDate,
         };
     }
