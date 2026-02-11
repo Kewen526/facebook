@@ -19,10 +19,13 @@
         .btn-stop:hover { background: #e02020; }
         .btn-secondary { background: rgba(255,255,255,0.2); color: white; }
         .btn-secondary:hover { background: rgba(255,255,255,0.3); }
+        .btn-primary { background: #1877f2; color: white; }
+        .btn-primary:hover { background: #166fe5; }
+        .btn-danger { background: #fa3e3e; color: white; font-size: 12px; padding: 4px 10px; }
+        .btn-sm { padding: 4px 12px; font-size: 12px; }
 
         .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
 
-        /* 状态栏 */
         .status-bar { background: white; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
         .status-item { display: flex; flex-direction: column; gap: 4px; }
         .status-label { font-size: 12px; color: #65676b; text-transform: uppercase; }
@@ -32,7 +35,6 @@
         .status-dot.stopped { background: #fa3e3e; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-        /* 统计卡片 */
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
         .stat-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); text-align: center; }
         .stat-number { font-size: 32px; font-weight: 700; color: #1877f2; }
@@ -41,19 +43,16 @@
         .stat-card.non-target .stat-number { color: #fa3e3e; }
         .stat-card.liked .stat-number { color: #f7b928; }
 
-        /* 标签页 */
-        .tabs { display: flex; gap: 0; margin-bottom: 20px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .tab { padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: 500; color: #65676b; border-bottom: 3px solid transparent; transition: all 0.2s; flex: 1; text-align: center; }
+        .tabs { display: flex; gap: 0; margin-bottom: 20px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); flex-wrap: wrap; }
+        .tab { padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: 500; color: #65676b; border-bottom: 3px solid transparent; transition: all 0.2s; flex: 1; text-align: center; min-width: 100px; }
         .tab:hover { background: #f0f2f5; }
         .tab.active { color: #1877f2; border-bottom-color: #1877f2; }
 
-        /* 筛选栏 */
         .filters { background: white; border-radius: 8px; padding: 12px 20px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.1); flex-wrap: wrap; }
         .filter-select, .filter-input { padding: 8px 12px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; outline: none; }
         .filter-select:focus, .filter-input:focus { border-color: #1877f2; }
         .filter-input { flex: 1; min-width: 200px; }
 
-        /* 帖子列表 */
         .post-list { display: flex; flex-direction: column; gap: 12px; }
         .post-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s; }
         .post-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
@@ -70,6 +69,7 @@
         .badge-liked { background: #fff3cd; color: #d4a600; }
         .badge-interested { background: #d4edda; color: #155724; }
         .badge-not-interested { background: #f8d7da; color: #721c24; }
+        .badge-discovered { background: #e8daef; color: #6c3483; }
         .post-content { font-size: 14px; line-height: 1.6; color: #1c1e21; margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; max-height: 150px; overflow: hidden; position: relative; }
         .post-content.expanded { max-height: none; }
         .post-content:not(.expanded)::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, white); }
@@ -77,7 +77,6 @@
         .post-link { color: #1877f2; text-decoration: none; font-size: 13px; }
         .post-link:hover { text-decoration: underline; }
 
-        /* 帖子详情模态框 */
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; justify-content: center; align-items: flex-start; padding: 40px 20px; overflow-y: auto; }
         .modal { background: white; border-radius: 12px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; }
         .modal-header { padding: 20px 24px; border-bottom: 1px solid #e4e6eb; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 1; border-radius: 12px 12px 0 0; }
@@ -93,15 +92,13 @@
         .detail-info dd { color: #1c1e21; }
         .ai-result { background: #f0f2f5; padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
 
-        /* 操作记录表 */
         .actions-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .actions-table th, .actions-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e4e6eb; }
         .actions-table th { background: #f0f2f5; font-weight: 600; color: #65676b; }
         .action-status-pending { color: #f7b928; }
-        .action-status-success { color: #42b72a; }
+        .action-status-success, .action-status-completed { color: #42b72a; }
         .action-status-failed { color: #fa3e3e; }
 
-        /* 分页 */
         .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 20px; align-items: center; }
         .pagination .btn { padding: 6px 14px; font-size: 13px; background: white; color: #1c1e21; border: 1px solid #dddfe2; }
         .pagination .btn:hover { background: #f0f2f5; }
@@ -109,28 +106,46 @@
         .pagination .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .page-info { font-size: 13px; color: #65676b; }
 
-        /* 监控日志 */
         .log-list { font-size: 13px; }
-        .log-item { padding: 10px 16px; border-bottom: 1px solid #e4e6eb; display: flex; gap: 16px; align-items: center; }
+        .log-item { padding: 10px 16px; border-bottom: 1px solid #e4e6eb; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
         .log-item:last-child { border-bottom: none; }
         .log-page-type { font-weight: 600; min-width: 80px; }
 
-        /* 空状态 */
         .empty-state { text-align: center; padding: 60px 20px; color: #65676b; }
-        .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
         .empty-state h3 { margin-bottom: 8px; }
 
-        /* 响应式 */
+        /* 管理表格 */
+        .mgmt-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .mgmt-card h3 { font-size: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+        .mgmt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .mgmt-table th, .mgmt-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e4e6eb; }
+        .mgmt-table th { background: #f0f2f5; font-weight: 600; color: #65676b; }
+        .mgmt-table td { vertical-align: middle; }
+        .form-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+        .form-row input, .form-row select { padding: 8px 12px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; }
+        .form-row input { flex: 1; min-width: 180px; }
+        .toggle { position: relative; width: 40px; height: 22px; background: #ccc; border-radius: 11px; cursor: pointer; transition: 0.3s; }
+        .toggle.on { background: #42b72a; }
+        .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; transition: 0.3s; }
+        .toggle.on::after { left: 20px; }
+
+        /* 统计面板 */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+        .dashboard-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .dashboard-card h4 { font-size: 14px; color: #65676b; margin-bottom: 12px; }
+        .dashboard-stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f2f5; font-size: 13px; }
+        .dashboard-stat:last-child { border-bottom: none; }
+
         @media (max-width: 768px) {
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
             .filters { flex-direction: column; }
             .detail-info { grid-template-columns: 1fr; }
+            .dashboard-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 <div id="app">
-    <!-- 头部 -->
     <header class="header">
         <h1>Facebook帖子监控系统</h1>
         <div class="header-actions">
@@ -144,10 +159,17 @@
         <!-- 状态栏 -->
         <div class="status-bar">
             <div class="status-item">
-                <span class="status-label">运行状态</span>
+                <span class="status-label">监控状态</span>
                 <span class="status-value">
                     <span class="status-dot" :class="status.running ? 'running' : 'stopped'"></span>
                     {{ status.running ? '运行中' : '已停止' }}
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">发送状态</span>
+                <span class="status-value">
+                    <span class="status-dot" :class="sendingStatus.running ? 'running' : 'stopped'"></span>
+                    {{ sendingStatus.running ? '运行中' : '已停止' }}
                 </span>
             </div>
             <div class="status-item" v-if="status.running">
@@ -155,16 +177,8 @@
                 <span class="status-value">{{ status.current_page_label || '-' }}</span>
             </div>
             <div class="status-item" v-if="status.running">
-                <span class="status-label">当前轮次</span>
+                <span class="status-label">轮次</span>
                 <span class="status-value">{{ status.round_count }}</span>
-            </div>
-            <div class="status-item" v-if="status.running">
-                <span class="status-label">本页已处理</span>
-                <span class="status-value">{{ status.posts_processed }}</span>
-            </div>
-            <div class="status-item" v-if="status.last_action">
-                <span class="status-label">最新操作</span>
-                <span class="status-value" style="font-size:13px; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ status.last_action }}</span>
             </div>
             <div class="status-item" v-if="status.error">
                 <span class="status-label">错误</span>
@@ -199,12 +213,15 @@
         <!-- 标签页 -->
         <div class="tabs">
             <div class="tab" :class="{ active: activeTab === 'posts' }" @click="activeTab = 'posts'">帖子列表</div>
+            <div class="tab" :class="{ active: activeTab === 'accounts' }" @click="activeTab = 'accounts'; loadAccounts()">账号管理</div>
+            <div class="tab" :class="{ active: activeTab === 'whatsapp' }" @click="activeTab = 'whatsapp'; loadWhatsApp()">WhatsApp</div>
+            <div class="tab" :class="{ active: activeTab === 'sending' }" @click="activeTab = 'sending'; loadSendingStatus()">发送控制</div>
+            <div class="tab" :class="{ active: activeTab === 'dashboard' }" @click="activeTab = 'dashboard'; loadDashboard()">统计面板</div>
             <div class="tab" :class="{ active: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">监控日志</div>
         </div>
 
-        <!-- 帖子列表 -->
+        <!-- ====== 帖子列表 ====== -->
         <div v-if="activeTab === 'posts'">
-            <!-- 筛选栏 -->
             <div class="filters">
                 <select class="filter-select" v-model="filters.source" @change="loadPosts(1)">
                     <option value="">全部来源</option>
@@ -218,10 +235,9 @@
                     <option value="false">非目标客户</option>
                 </select>
                 <input class="filter-input" v-model="filters.search" placeholder="搜索帖子内容..." @keyup.enter="loadPosts(1)" />
-                <button class="btn btn-secondary" style="background:#1877f2; color:white;" @click="loadPosts(1)">搜索</button>
+                <button class="btn btn-primary" @click="loadPosts(1)">搜索</button>
             </div>
 
-            <!-- 帖子卡片 -->
             <div class="post-list">
                 <div class="post-card" v-for="post in posts" :key="post.id" @click="openPostDetail(post)">
                     <div class="post-header">
@@ -239,27 +255,25 @@
                         <div class="post-badges">
                             <span class="badge badge-source">{{ sourceLabel(post.source_page) }}</span>
                             <span class="badge" :class="post.is_target ? 'badge-target' : 'badge-non-target'">{{ post.is_target ? '目标客户' : '非目标' }}</span>
+                            <span class="badge badge-discovered" v-if="post.discovered_by">{{ post.discovered_by }}</span>
                             <span class="badge badge-liked" v-if="post.action_liked">已点赞</span>
                             <span class="badge badge-interested" v-if="post.action_interested">有兴趣</span>
                             <span class="badge badge-not-interested" v-if="post.action_not_interested">没兴趣</span>
                         </div>
                     </div>
-                    <div class="post-content" :class="{ expanded: post._expanded }">{{ post.content }}</div>
+                    <div class="post-content">{{ post.content }}</div>
                     <div class="post-actions-bar">
                         <a v-if="post.post_url" :href="post.post_url" target="_blank" class="post-link" @click.stop>查看原帖</a>
                         <span style="font-size:12px; color:#65676b;">帖子ID: {{ post.post_id }}</span>
-                        <span style="font-size:12px; color:#65676b; margin-left:auto;">操作: {{ post.actions ? post.actions.length : 0 }} 条记录</span>
                     </div>
                 </div>
             </div>
 
-            <!-- 空状态 -->
             <div class="empty-state" v-if="posts.length === 0 && !loading">
                 <h3>暂无帖子数据</h3>
                 <p>启动监控后，帖子会自动出现在这里</p>
             </div>
 
-            <!-- 分页 -->
             <div class="pagination" v-if="totalPages > 1">
                 <button class="btn" :disabled="currentPage <= 1" @click="loadPosts(currentPage - 1)">上一页</button>
                 <template v-for="p in visiblePages" :key="p">
@@ -270,12 +284,214 @@
             </div>
         </div>
 
-        <!-- 日志标签页 -->
+        <!-- ====== 账号管理 ====== -->
+        <div v-if="activeTab === 'accounts'">
+            <div class="mgmt-card">
+                <h3>添加账号</h3>
+                <div class="form-row">
+                    <input v-model="newAccount.name" placeholder="账号名称/邮箱" />
+                    <select v-model="newAccount.account_type" style="min-width:120px;">
+                        <option value="monitor">监控账号</option>
+                        <option value="sender">发送账号</option>
+                    </select>
+                    <input v-model="newAccount.cookie_url" placeholder="Cookie JSON URL" />
+                    <button class="btn btn-primary" @click="createAccount">添加</button>
+                </div>
+            </div>
+
+            <div class="mgmt-card">
+                <h3>账号列表 ({{ accounts.length }})</h3>
+                <table class="mgmt-table">
+                    <thead>
+                        <tr><th>名称</th><th>类型</th><th>Cookie状态</th><th>账号状态</th><th>关联WhatsApp</th><th>启用</th><th>操作</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="acc in accounts" :key="acc.id">
+                            <td>{{ acc.name }}</td>
+                            <td><span class="badge" :class="acc.account_type === 'monitor' ? 'badge-source' : 'badge-target'">{{ acc.account_type === 'monitor' ? '监控' : '发送' }}</span></td>
+                            <td><span :style="{ color: acc.cookie_status === 'valid' ? '#42b72a' : '#fa3e3e' }">{{ acc.cookie_status }}</span></td>
+                            <td>{{ acc.status }}</td>
+                            <td>
+                                <select v-if="acc.account_type === 'sender'" @change="updateAccountWhatsApp(acc, $event.target.value)" style="padding:4px 8px; font-size:12px; border:1px solid #ddd; border-radius:4px;">
+                                    <option value="">无</option>
+                                    <option v-for="wa in whatsappAccounts" :key="wa.id" :value="wa.id" :selected="wa.id === acc.whatsapp_account_id">{{ wa.phone_number }}</option>
+                                </select>
+                                <span v-else style="color:#65676b;">-</span>
+                            </td>
+                            <td><div class="toggle" :class="{ on: acc.enabled }" @click="toggleAccount(acc)"></div></td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" @click="refreshCookie(acc.id)" style="margin-right:4px;">刷新Cookie</button>
+                                <button class="btn btn-sm btn-danger" @click="deleteAccount(acc.id)">删除</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="accounts.length === 0" class="empty-state" style="padding:30px;">
+                    <p>暂无账号，请先添加</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== WhatsApp管理 ====== -->
+        <div v-if="activeTab === 'whatsapp'">
+            <div class="mgmt-card">
+                <h3>添加WhatsApp账号</h3>
+                <div class="form-row">
+                    <input v-model="newWhatsApp.phone_number" placeholder="WhatsApp号码 (如 +8613800138000)" />
+                    <button class="btn btn-primary" @click="createWhatsApp">添加</button>
+                </div>
+            </div>
+
+            <div class="mgmt-card">
+                <h3>WhatsApp账号列表 ({{ whatsappAccounts.length }})</h3>
+                <table class="mgmt-table">
+                    <thead>
+                        <tr><th>号码</th><th>使用次数</th><th>启用</th><th>创建时间</th><th>操作</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="wa in whatsappAccounts" :key="wa.id">
+                            <td>{{ wa.phone_number }}</td>
+                            <td>{{ wa.usage_count }}</td>
+                            <td><div class="toggle" :class="{ on: wa.enabled }" @click="toggleWhatsApp(wa)"></div></td>
+                            <td>{{ formatDate(wa.created_at) }}</td>
+                            <td><button class="btn btn-sm btn-danger" @click="deleteWhatsApp(wa.id)">删除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="whatsappAccounts.length === 0" class="empty-state" style="padding:30px;">
+                    <p>暂无WhatsApp账号</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== 发送控制 ====== -->
+        <div v-if="activeTab === 'sending'">
+            <div class="mgmt-card">
+                <h3>
+                    发送控制
+                    <div>
+                        <button class="btn btn-start" v-if="!sendingStatus.running" @click="startSending">启动发送</button>
+                        <button class="btn btn-stop" v-else @click="stopSending">停止发送</button>
+                    </div>
+                </h3>
+                <div v-if="sendingStatus.accounts && Object.keys(sendingStatus.accounts).length > 0">
+                    <table class="mgmt-table">
+                        <thead>
+                            <tr><th>账号</th><th>当前任务</th><th>状态</th><th>最后更新</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(info, id) in sendingStatus.accounts" :key="id">
+                                <td>{{ info.account_name }}</td>
+                                <td>{{ info.current_task || '空闲' }}</td>
+                                <td>
+                                    <span :style="{ color: info.status === 'executing' ? '#1877f2' : info.status === 'idle' ? '#42b72a' : '#fa3e3e' }">
+                                        {{ info.status === 'executing' ? '执行中' : info.status === 'idle' ? '空闲' : info.status }}
+                                    </span>
+                                </td>
+                                <td>{{ formatDate(info.last_update) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div v-else class="empty-state" style="padding:30px;">
+                    <p>{{ sendingStatus.running ? '等待任务中...' : '发送未启动' }}</p>
+                </div>
+            </div>
+
+            <div class="mgmt-card" v-if="dashboardData.task_queue">
+                <h3>任务队列</h3>
+                <div class="stats-grid" style="margin-bottom:0;">
+                    <div class="stat-card">
+                        <div class="stat-number" style="font-size:24px;">{{ dashboardData.task_queue.pending }}</div>
+                        <div class="stat-label">待执行</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" style="font-size:24px; color:#1877f2;">{{ dashboardData.task_queue.in_progress }}</div>
+                        <div class="stat-label">执行中</div>
+                    </div>
+                    <div class="stat-card target">
+                        <div class="stat-number" style="font-size:24px;">{{ dashboardData.task_queue.completed_today }}</div>
+                        <div class="stat-label">今日完成</div>
+                    </div>
+                    <div class="stat-card non-target">
+                        <div class="stat-number" style="font-size:24px;">{{ dashboardData.task_queue.failed_today }}</div>
+                        <div class="stat-label">今日失败</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== 统计面板 ====== -->
+        <div v-if="activeTab === 'dashboard'">
+            <!-- 发送账号统计 -->
+            <div class="mgmt-card" v-if="dashboardData.sender_accounts && dashboardData.sender_accounts.length > 0">
+                <h3>发送账号统计</h3>
+                <table class="mgmt-table">
+                    <thead>
+                        <tr><th>账号</th><th>总评论</th><th>总私信</th><th>今日私信</th><th>今日加好友</th><th>WhatsApp</th><th>状态</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="sa in dashboardData.sender_accounts" :key="sa.id">
+                            <td>{{ sa.name }}</td>
+                            <td style="color:#1877f2; font-weight:600;">{{ sa.total_comments }}</td>
+                            <td style="color:#42b72a; font-weight:600;">{{ sa.total_dms }}</td>
+                            <td>{{ sa.daily_dms }}</td>
+                            <td>{{ sa.daily_friend_requests }}</td>
+                            <td>{{ sa.whatsapp_phone || '-' }}</td>
+                            <td><span :style="{ color: sa.status === 'active' ? '#42b72a' : '#fa3e3e' }">{{ sa.status }}</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 监控账号统计 -->
+            <div class="mgmt-card" v-if="dashboardData.monitor_accounts && dashboardData.monitor_accounts.length > 0">
+                <h3>监控账号统计</h3>
+                <table class="mgmt-table">
+                    <thead>
+                        <tr><th>账号</th><th>目标帖子</th><th>总帖子</th><th>启用</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="ma in dashboardData.monitor_accounts" :key="ma.id">
+                            <td>{{ ma.name }}</td>
+                            <td style="color:#42b72a; font-weight:600;">{{ ma.target_posts_found }}</td>
+                            <td>{{ ma.total_posts_found }}</td>
+                            <td><span :style="{ color: ma.enabled ? '#42b72a' : '#fa3e3e' }">{{ ma.enabled ? '是' : '否' }}</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- WhatsApp使用统计 -->
+            <div class="mgmt-card" v-if="dashboardData.whatsapp_accounts && dashboardData.whatsapp_accounts.length > 0">
+                <h3>WhatsApp使用统计</h3>
+                <table class="mgmt-table">
+                    <thead>
+                        <tr><th>号码</th><th>用于私信次数</th><th>启用</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="wa in dashboardData.whatsapp_accounts" :key="wa.id">
+                            <td>{{ wa.phone_number }}</td>
+                            <td style="color:#1877f2; font-weight:600;">{{ wa.usage_count }}</td>
+                            <td><span :style="{ color: wa.enabled ? '#42b72a' : '#fa3e3e' }">{{ wa.enabled ? '是' : '否' }}</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="empty-state" v-if="!dashboardData.sender_accounts || dashboardData.sender_accounts.length === 0">
+                <h3>暂无统计数据</h3>
+                <p>添加账号并启动发送后，统计数据将显示在这里</p>
+            </div>
+        </div>
+
+        <!-- ====== 监控日志 ====== -->
         <div v-if="activeTab === 'logs'">
             <div style="background:white; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
                 <div class="log-list">
                     <div class="log-item" v-for="log in logs" :key="log.id">
                         <span class="log-page-type" :style="{ color: sourceColor(log.page_type) }">{{ sourceLabel(log.page_type) }}</span>
+                        <span v-if="log.account_name" class="badge badge-discovered">{{ log.account_name }}</span>
                         <span>扫描: {{ log.posts_scanned }}</span>
                         <span style="color:#42b72a;">新增: {{ log.posts_new }}</span>
                         <span style="color:#65676b; font-size:12px;">{{ formatDate(log.started_at) }}</span>
@@ -297,7 +513,6 @@
                 <button class="modal-close" @click="selectedPost = null">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- 基本信息 -->
                 <div class="detail-section">
                     <h3>基本信息</h3>
                     <dl class="detail-info">
@@ -307,39 +522,53 @@
                         <dt>作者主页</dt><dd><a v-if="selectedPost.author_profile_url" :href="selectedPost.author_profile_url" target="_blank">{{ selectedPost.author_profile_url }}</a><span v-else>-</span></dd>
                         <dt>帖子时间</dt><dd>{{ selectedPost.post_time || '未知' }}</dd>
                         <dt>来源页面</dt><dd>{{ sourceLabel(selectedPost.source_page) }}</dd>
+                        <dt>发现者</dt><dd>{{ selectedPost.discovered_by || '默认' }}</dd>
                         <dt>采集时间</dt><dd>{{ formatDate(selectedPost.created_at) }}</dd>
                         <dt>帖子链接</dt><dd><a v-if="selectedPost.post_url" :href="selectedPost.post_url" target="_blank">查看原帖</a><span v-else>-</span></dd>
                     </dl>
                 </div>
 
-                <!-- AI判定 -->
                 <div class="detail-section">
                     <h3>AI判定</h3>
                     <div style="margin-bottom:8px;">
                         <span class="badge" :class="selectedPost.is_target ? 'badge-target' : 'badge-non-target'" style="font-size:14px; padding:6px 14px;">
                             {{ selectedPost.is_target ? '目标客户' : '非目标客户' }}
                         </span>
-                        <span class="badge badge-liked" v-if="selectedPost.action_liked" style="font-size:14px; padding:6px 14px;">已点赞</span>
-                        <span class="badge badge-interested" v-if="selectedPost.action_interested" style="font-size:14px; padding:6px 14px;">有兴趣</span>
-                        <span class="badge badge-not-interested" v-if="selectedPost.action_not_interested" style="font-size:14px; padding:6px 14px;">没兴趣</span>
                     </div>
                 </div>
 
-                <!-- 帖子内容 -->
                 <div class="detail-section">
                     <h3>帖子内容</h3>
                     <div class="detail-content">{{ selectedPost.content }}</div>
                 </div>
 
-                <!-- AI分析详情 -->
                 <div class="detail-section" v-if="selectedPost.ai_result">
                     <h3>AI分析详情</h3>
                     <div class="ai-result">{{ selectedPost.ai_result }}</div>
                 </div>
 
+                <!-- 发送任务状态 -->
+                <div class="detail-section" v-if="selectedPost.send_tasks && selectedPost.send_tasks.length > 0">
+                    <h3>发送任务</h3>
+                    <table class="actions-table">
+                        <thead>
+                            <tr><th>账号</th><th>类型</th><th>状态</th><th>内容</th><th>时间</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="task in selectedPost.send_tasks" :key="task.id">
+                                <td>{{ task.account_name }}</td>
+                                <td>{{ taskTypeLabel(task.task_type) }}</td>
+                                <td :class="'action-status-' + task.status">{{ task.status }}</td>
+                                <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ task.generated_text || task.error_message || '-' }}</td>
+                                <td>{{ formatDate(task.completed_at || task.created_at) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
                 <!-- 操作记录 -->
                 <div class="detail-section" v-if="selectedPost.actions && selectedPost.actions.length > 0">
-                    <h3>操作记录 (未来多账号发送)</h3>
+                    <h3>操作记录</h3>
                     <table class="actions-table">
                         <thead>
                             <tr><th>账号</th><th>操作类型</th><th>状态</th><th>详情</th><th>时间</th></tr>
@@ -355,10 +584,6 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="detail-section" v-else>
-                    <h3>操作记录 (未来多账号发送)</h3>
-                    <p style="color:#65676b; font-size:13px;">暂无操作记录。后续多账号发送任务将记录在此。</p>
-                </div>
             </div>
         </div>
     </div>
@@ -373,6 +598,10 @@ createApp({
         const stats = ref({});
         const posts = ref([]);
         const logs = ref([]);
+        const accounts = ref([]);
+        const whatsappAccounts = ref([]);
+        const sendingStatus = ref({ running: false, accounts: {} });
+        const dashboardData = ref({});
         const activeTab = ref('posts');
         const selectedPost = ref(null);
         const loading = ref(false);
@@ -380,6 +609,8 @@ createApp({
         const totalPosts = ref(0);
         const totalPages = ref(0);
         const filters = ref({ source: '', is_target: '', search: '' });
+        const newAccount = ref({ name: '', account_type: 'monitor', cookie_url: '' });
+        const newWhatsApp = ref({ phone_number: '' });
         let statusTimer = null;
 
         const visiblePages = computed(() => {
@@ -406,15 +637,8 @@ createApp({
             }
         }
 
-        async function loadStatus() {
-            const data = await fetchAPI('/api/status');
-            if (data) status.value = data;
-        }
-
-        async function loadStats() {
-            const data = await fetchAPI('/api/stats');
-            if (data && data.success) stats.value = data.data;
-        }
+        async function loadStatus() { const d = await fetchAPI('/api/status'); if (d) status.value = d; }
+        async function loadStats() { const d = await fetchAPI('/api/stats'); if (d && d.success) stats.value = d.data; }
 
         async function loadPosts(page = 1) {
             loading.value = true;
@@ -423,90 +647,178 @@ createApp({
             if (filters.value.source) params.set('source', filters.value.source);
             if (filters.value.is_target) params.set('is_target', filters.value.is_target);
             if (filters.value.search) params.set('search', filters.value.search);
-
-            const data = await fetchAPI(`/api/posts?${params}`);
-            if (data && data.success) {
-                posts.value = data.data;
-                totalPosts.value = data.total;
-                totalPages.value = data.total_pages;
-            }
+            const d = await fetchAPI(`/api/posts?${params}`);
+            if (d && d.success) { posts.value = d.data; totalPosts.value = d.total; totalPages.value = d.total_pages; }
             loading.value = false;
         }
 
-        async function loadLogs() {
-            const data = await fetchAPI('/api/logs');
-            if (data && data.success) logs.value = data.data;
+        async function loadLogs() { const d = await fetchAPI('/api/logs'); if (d && d.success) logs.value = d.data; }
+
+        async function loadAccounts() {
+            const d = await fetchAPI('/api/accounts');
+            if (d && d.success) accounts.value = d.data;
+            // 同时加载WhatsApp用于下拉
+            await loadWhatsApp();
+        }
+
+        async function loadWhatsApp() {
+            const d = await fetchAPI('/api/whatsapp-accounts');
+            if (d && d.success) whatsappAccounts.value = d.data;
+        }
+
+        async function loadSendingStatus() {
+            const d = await fetchAPI('/api/sending/status');
+            if (d && d.success) sendingStatus.value = d.data;
+            await loadDashboard();
+        }
+
+        async function loadDashboard() {
+            const d = await fetchAPI('/api/stats/dashboard');
+            if (d && d.success) dashboardData.value = d.data;
         }
 
         async function startMonitor() {
-            const data = await fetchAPI('/api/start', { method: 'POST' });
-            if (data) {
-                alert(data.message);
-                loadStatus();
-            }
+            const d = await fetchAPI('/api/start', { method: 'POST' });
+            if (d) { alert(d.message); loadStatus(); }
         }
 
         async function stopMonitor() {
             if (!confirm('确定要停止监控吗？')) return;
-            const data = await fetchAPI('/api/stop', { method: 'POST' });
-            if (data) {
-                alert(data.message);
-                loadStatus();
+            const d = await fetchAPI('/api/stop', { method: 'POST' });
+            if (d) { alert(d.message); loadStatus(); }
+        }
+
+        async function startSending() {
+            const d = await fetchAPI('/api/sending/start', { method: 'POST' });
+            if (d) { alert(d.message); loadSendingStatus(); }
+        }
+
+        async function stopSending() {
+            if (!confirm('确定要停止发送吗？')) return;
+            const d = await fetchAPI('/api/sending/stop', { method: 'POST' });
+            if (d) { alert(d.message); loadSendingStatus(); }
+        }
+
+        async function createAccount() {
+            if (!newAccount.value.name || !newAccount.value.cookie_url) { alert('请填写账号名称和Cookie URL'); return; }
+            const d = await fetchAPI('/api/accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newAccount.value)
+            });
+            if (d && d.success) {
+                alert(d.message);
+                newAccount.value = { name: '', account_type: 'monitor', cookie_url: '' };
+                loadAccounts();
+            } else {
+                alert(d ? d.message : '创建失败');
             }
+        }
+
+        async function deleteAccount(id) {
+            if (!confirm('确定要删除这个账号吗？')) return;
+            const d = await fetchAPI(`/api/accounts/${id}`, { method: 'DELETE' });
+            if (d && d.success) loadAccounts();
+            else alert(d ? d.message : '删除失败');
+        }
+
+        async function toggleAccount(acc) {
+            const d = await fetchAPI(`/api/accounts/${acc.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: !acc.enabled })
+            });
+            if (d && d.success) loadAccounts();
+        }
+
+        async function updateAccountWhatsApp(acc, waId) {
+            const d = await fetchAPI(`/api/accounts/${acc.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ whatsapp_account_id: waId ? parseInt(waId) : null })
+            });
+            if (d && d.success) loadAccounts();
+        }
+
+        async function refreshCookie(id) {
+            const d = await fetchAPI(`/api/accounts/${id}/refresh-cookie`, { method: 'POST' });
+            alert(d ? d.message : '刷新失败');
+            loadAccounts();
+        }
+
+        async function createWhatsApp() {
+            if (!newWhatsApp.value.phone_number) { alert('请填写WhatsApp号码'); return; }
+            const d = await fetchAPI('/api/whatsapp-accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newWhatsApp.value)
+            });
+            if (d && d.success) {
+                alert(d.message);
+                newWhatsApp.value = { phone_number: '' };
+                loadWhatsApp();
+            } else {
+                alert(d ? d.message : '创建失败');
+            }
+        }
+
+        async function deleteWhatsApp(id) {
+            if (!confirm('确定要删除这个WhatsApp账号吗？')) return;
+            const d = await fetchAPI(`/api/whatsapp-accounts/${id}`, { method: 'DELETE' });
+            if (d && d.success) loadWhatsApp();
+            else alert(d ? d.message : '删除失败');
+        }
+
+        async function toggleWhatsApp(wa) {
+            const d = await fetchAPI(`/api/whatsapp-accounts/${wa.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: !wa.enabled })
+            });
+            if (d && d.success) loadWhatsApp();
         }
 
         function refreshData() {
             loadStatus();
             loadStats();
             loadPosts(currentPage.value);
+            if (activeTab.value === 'sending') loadSendingStatus();
+            if (activeTab.value === 'dashboard') loadDashboard();
         }
 
-        function openPostDetail(post) {
-            selectedPost.value = post;
+        async function openPostDetail(post) {
+            // 加载带send_tasks的详情
+            const d = await fetchAPI(`/api/posts/${post.id}`);
+            if (d && d.success) selectedPost.value = d.data;
+            else selectedPost.value = post;
         }
 
-        function sourceLabel(source) {
-            const map = { home: '首页动态', groups: '小组动态', search: '搜索帖子' };
-            return map[source] || source || '未知';
-        }
-
-        function sourceColor(source) {
-            const map = { home: '#1877f2', groups: '#42b72a', search: '#f7b928' };
-            return map[source] || '#65676b';
-        }
-
-        function actionTypeLabel(type) {
-            const map = { message: '私信', friend_request: '加好友', comment: '评论' };
-            return map[type] || type;
-        }
-
-        function formatDate(dateStr) {
-            if (!dateStr) return '-';
-            const d = new Date(dateStr);
-            return d.toLocaleString('zh-CN');
-        }
+        function sourceLabel(s) { return { home: '首页动态', groups: '小组动态', search: '搜索帖子' }[s] || s || '未知'; }
+        function sourceColor(s) { return { home: '#1877f2', groups: '#42b72a', search: '#f7b928' }[s] || '#65676b'; }
+        function actionTypeLabel(t) { return { message: '私信', friend_request: '加好友', comment: '评论', dm: '私信', add_friend: '加好友' }[t] || t; }
+        function taskTypeLabel(t) { return { comment: '评论', dm: '私信', add_friend: '加好友' }[t] || t; }
+        function formatDate(ds) { if (!ds) return '-'; return new Date(ds).toLocaleString('zh-CN'); }
 
         onMounted(() => {
-            loadStatus();
-            loadStats();
-            loadPosts();
-            // 定时刷新
+            loadStatus(); loadStats(); loadPosts();
             statusTimer = setInterval(() => {
-                loadStatus();
-                loadStats();
+                loadStatus(); loadStats();
                 if (activeTab.value === 'posts') loadPosts(currentPage.value);
+                if (activeTab.value === 'sending') loadSendingStatus();
             }, 10000);
         });
 
-        onUnmounted(() => {
-            if (statusTimer) clearInterval(statusTimer);
-        });
+        onUnmounted(() => { if (statusTimer) clearInterval(statusTimer); });
 
         return {
-            status, stats, posts, logs, activeTab, selectedPost, loading,
-            currentPage, totalPosts, totalPages, filters, visiblePages,
-            loadPosts, loadLogs, startMonitor, stopMonitor, refreshData,
-            openPostDetail, sourceLabel, sourceColor, actionTypeLabel, formatDate,
+            status, stats, posts, logs, accounts, whatsappAccounts, sendingStatus, dashboardData,
+            activeTab, selectedPost, loading, currentPage, totalPosts, totalPages, filters, visiblePages,
+            newAccount, newWhatsApp,
+            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard,
+            startMonitor, stopMonitor, startSending, stopSending, refreshData, openPostDetail,
+            createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie,
+            createWhatsApp, deleteWhatsApp, toggleWhatsApp,
+            sourceLabel, sourceColor, actionTypeLabel, taskTypeLabel, formatDate,
         };
     }
 }).mount('#app');
