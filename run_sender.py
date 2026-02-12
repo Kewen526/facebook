@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     logger.info("=" * 60)
     logger.info("Facebook发送引擎 - 本地启动")
+    logger.info("每个发送账号独立线程 + 独立浏览器")
     logger.info("自动执行: 评论 / 私信 / 加好友")
     logger.info("数据将写入远程MySQL数据库")
     logger.info("服务器面板: http://47.95.157.46:8080")

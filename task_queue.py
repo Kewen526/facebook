@@ -270,84 +270,128 @@ def _get_or_create_sender_engine(account_id, account_name, cookie_url):
     return None
 
 
+def _run_sender_for_account(account_id, account_name, cookie_url):
+    """单个发送账号的任务处理循环（独立线程+独立浏览器）"""
+    logger.info(f"[{account_name}] 发送线程启动，初始化浏览器...")
+
+    _sender_status[account_id] = {
+        "account_name": account_name,
+        "current_task": None,
+        "status": "initializing",
+        "last_update": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # 创建该账号专属的发送引擎
+    engine = SenderEngine(account_name, cookie_url)
+    if not engine.initialize():
+        logger.error(f"[{account_name}] 发送引擎初始化失败")
+        _sender_status[account_id] = {
+            "account_name": account_name,
+            "current_task": None,
+            "status": "engine_failed",
+            "last_update": datetime.now(timezone.utc).isoformat(),
+        }
+        return
+
+    _sender_engines[account_id] = engine
+    logger.info(f"[{account_name}] 浏览器初始化成功，开始处理任务...")
+
+    _sender_status[account_id] = {
+        "account_name": account_name,
+        "current_task": None,
+        "status": "idle",
+        "last_update": datetime.now(timezone.utc).isoformat(),
+    }
+
+    while _task_processor_running:
+        try:
+            # 获取下一个任务
+            task_info = get_next_task(account_id)
+            if not task_info:
+                time.sleep(30)
+                continue
+
+            # 更新状态
+            _sender_status[account_id] = {
+                "account_name": account_name,
+                "current_task": task_info["task_type"],
+                "status": "executing",
+                "last_update": datetime.now(timezone.utc).isoformat(),
+            }
+
+            # 执行任务
+            execute_task(task_info, engine)
+
+            # 更新状态
+            _sender_status[account_id] = {
+                "account_name": account_name,
+                "current_task": None,
+                "status": "idle",
+                "last_update": datetime.now(timezone.utc).isoformat(),
+            }
+
+            time.sleep(5)
+
+        except Exception as e:
+            logger.error(f"[{account_name}] 任务处理出错: {e}")
+            time.sleep(10)
+
+    # 清理该账号的发送引擎
+    engine.cleanup()
+    _sender_engines.pop(account_id, None)
+    logger.info(f"[{account_name}] 发送线程已停止")
+
+
+# 跟踪每个账号的发送线程
+_sender_threads = {}
+
+
 def run_task_processor():
-    """发送任务处理主循环"""
+    """发送任务处理主循环 - 为每个sender账号启动独立线程"""
     global _task_processor_running
     _task_processor_running = True
 
     logger.info("发送任务处理器已启动")
 
-    while _task_processor_running:
-        try:
-            # 获取所有已启用的sender账号
-            session = get_session()
-            try:
-                sender_accounts = session.query(Account).filter(
-                    Account.account_type == 'sender',
-                    Account.enabled == True,
-                    Account.status != 'banned'
-                ).all()
-                accounts_info = [(a.id, a.name, a.cookie_url) for a in sender_accounts if a.cookie_url]
-            finally:
-                session.close()
+    # 获取所有已启用的sender账号
+    session = get_session()
+    try:
+        sender_accounts = session.query(Account).filter(
+            Account.account_type == 'sender',
+            Account.enabled == True,
+            Account.status != 'banned'
+        ).all()
+        accounts_info = [(a.id, a.name, a.cookie_url) for a in sender_accounts if a.cookie_url]
+    finally:
+        session.close()
 
-            if not accounts_info:
-                time.sleep(30)
-                continue
+    if not accounts_info:
+        logger.warning("没有可用的发送账号")
+        return
 
-            task_executed = False
-            for account_id, account_name, cookie_url in accounts_info:
-                if not _task_processor_running:
-                    break
+    logger.info(f"发现 {len(accounts_info)} 个发送账号，逐个启动独立线程...")
 
-                # 获取下一个任务
-                task_info = get_next_task(account_id)
-                if not task_info:
-                    continue
+    # 为每个账号启动独立线程
+    for account_id, account_name, cookie_url in accounts_info:
+        t = threading.Thread(
+            target=_run_sender_for_account,
+            args=(account_id, account_name, cookie_url),
+            daemon=True,
+        )
+        _sender_threads[account_id] = t
+        t.start()
+        logger.info(f"[{account_name}] 发送线程已启动")
+        time.sleep(5)  # 错开启动时间，避免同时创建浏览器
 
-                # 更新状态
-                _sender_status[account_id] = {
-                    "account_name": account_name,
-                    "current_task": task_info["task_type"],
-                    "status": "executing",
-                    "last_update": datetime.now(timezone.utc).isoformat(),
-                }
+    # 主循环等待所有线程
+    try:
+        while _task_processor_running:
+            time.sleep(5)
+    except KeyboardInterrupt:
+        _task_processor_running = False
 
-                # 获取或创建发送引擎
-                engine = _get_or_create_sender_engine(account_id, account_name, cookie_url)
-                if not engine:
-                    logger.error(f"[{account_name}] 发送引擎初始化失败")
-                    _sender_status[account_id] = {
-                        "account_name": account_name,
-                        "current_task": None,
-                        "status": "engine_failed",
-                        "last_update": datetime.now(timezone.utc).isoformat(),
-                    }
-                    continue
-
-                # 执行任务
-                execute_task(task_info, engine)
-                task_executed = True
-
-                # 更新状态
-                _sender_status[account_id] = {
-                    "account_name": account_name,
-                    "current_task": None,
-                    "status": "idle",
-                    "last_update": datetime.now(timezone.utc).isoformat(),
-                }
-
-            # 如果没有执行任何任务，等待更长时间
-            if not task_executed:
-                time.sleep(30)
-            else:
-                time.sleep(5)
-
-        except Exception as e:
-            logger.error(f"任务处理循环出错: {e}")
-            time.sleep(10)
-
-    # 清理所有发送引擎
+    # 等待所有线程结束
+    logger.info("正在停止所有发送线程...")
     for engine in _sender_engines.values():
         engine.cleanup()
     _sender_engines.clear()
