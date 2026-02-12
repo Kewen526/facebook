@@ -112,6 +112,10 @@ class SenderEngine:
 
             # 关闭遮罩层
             dismiss_overlay(self.driver)
+            time.sleep(2)
+
+            # 再次检查是否还有遮罩层
+            dismiss_overlay(self.driver)
 
             # 检测发送限制
             is_restricted, restriction_text = detect_sending_restriction(self.driver)
@@ -135,12 +139,18 @@ class SenderEngine:
 
             # 点击评论按钮激活评论区
             try:
-                comment_buttons = self.driver.find_elements(By.XPATH, "//div[@aria-label='评论']")
+                comment_buttons = self.driver.find_elements(By.XPATH,
+                    "//div[@aria-label='评论' or @aria-label='Comment' or @aria-label='Leave a comment']"
+                )
+                if not comment_buttons:
+                    comment_buttons = self.driver.find_elements(By.XPATH,
+                        "//span[text()='评论' or text()='Comment']//ancestor::div[@role='button']"
+                    )
                 if comment_buttons:
                     for button in comment_buttons:
                         if button.is_displayed():
                             self.driver.execute_script("arguments[0].click();", button)
-                            time.sleep(2)
+                            time.sleep(3)
                             break
             except Exception:
                 pass
@@ -148,9 +158,10 @@ class SenderEngine:
             # 查找评论框
             comment_box = None
             comment_selectors = [
-                "//div[(@aria-label='发表公开评论…' or @aria-label='输入回答…' or @aria-label='提交首条评论…' or @aria-label='写评论…') and @contenteditable='true' and @role='textbox']",
-                "//div[@contenteditable='true' and @role='textbox']",
+                "//div[(@aria-label='发表公开评论…' or @aria-label='输入回答…' or @aria-label='提交首条评论…' or @aria-label='写评论…' or @aria-label='Write a comment…' or @aria-label='Write a public comment…' or @aria-label='Write an answer…' or @aria-label='Submit the first comment…') and @contenteditable='true' and @role='textbox']",
                 "//div[contains(@aria-label, '评论') and @contenteditable='true']",
+                "//div[contains(@aria-label, 'comment') and @contenteditable='true']",
+                "//div[@contenteditable='true' and @role='textbox']",
                 "//form//div[@role='textbox']",
                 "//div[@data-lexical-editor='true']",
             ]
@@ -166,6 +177,36 @@ class SenderEngine:
                         break
                 except Exception:
                     continue
+
+            if not comment_box:
+                # 重试：滚动页面、再次关闭遮罩层、再次点击评论按钮
+                logger.info(f"[{self.account_name}] 未找到评论框，重试中...")
+                dismiss_overlay(self.driver)
+                self.driver.execute_script("window.scrollBy(0, 500);")
+                time.sleep(2)
+                try:
+                    retry_buttons = self.driver.find_elements(By.XPATH,
+                        "//div[@aria-label='评论' or @aria-label='Comment' or @aria-label='Leave a comment']"
+                    )
+                    for button in retry_buttons:
+                        if button.is_displayed():
+                            self.driver.execute_script("arguments[0].click();", button)
+                            time.sleep(3)
+                            break
+                except Exception:
+                    pass
+
+                for selector in comment_selectors:
+                    try:
+                        elements = self.driver.find_elements(By.XPATH, selector)
+                        for element in elements:
+                            if element.is_displayed():
+                                comment_box = element
+                                break
+                        if comment_box:
+                            break
+                    except Exception:
+                        continue
 
             if not comment_box:
                 return False, "未找到评论框"

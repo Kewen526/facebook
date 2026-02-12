@@ -86,7 +86,10 @@ def get_next_task(account_id):
 
         # 检查冷却时间
         if account.last_task_at:
-            elapsed = (datetime.now(timezone.utc) - account.last_task_at).total_seconds()
+            last_task_at = account.last_task_at
+            if last_task_at.tzinfo is None:
+                last_task_at = last_task_at.replace(tzinfo=timezone.utc)
+            elapsed = (datetime.now(timezone.utc) - last_task_at).total_seconds()
             if elapsed < SEND_COOLDOWN_SECONDS:
                 remaining = SEND_COOLDOWN_SECONDS - elapsed
                 logger.debug(f"[{account.name}] 冷却中，还需等待 {remaining:.0f}s")
