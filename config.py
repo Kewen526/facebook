@@ -75,7 +75,7 @@ MONITOR_PAGES = [
 # ============ 监控参数 ============
 MAX_POSTS_PER_PAGE = 100  # 每个页面最多刷100个帖子
 INTEREST_PROBABILITY = 0.8  # 80%概率点击有兴趣/没兴趣
-LIKE_PROBABILITY = 0.3  # 30%概率点赞
+LIKE_PROBABILITY = 0.005  # 0.5%概率点赞
 SCROLL_WAIT_MIN = 1  # 滚动后最小等待时间(秒)
 SCROLL_WAIT_MAX = 3  # 滚动后最大等待时间(秒)
 ACTION_WAIT_MIN = 0.5  # 操作间最小等待时间(秒)

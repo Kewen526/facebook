@@ -46,6 +46,8 @@ monitor_status = {
 _monitor_threads = {}
 # 跟踪搜索页面最后使用的URL（每个账号独立）
 _last_search_urls = {}
+# 被风控的账号 - 停止点赞
+_like_disabled_accounts = set()
 
 
 def update_status(**kwargs):
@@ -824,8 +826,40 @@ def click_not_interested(driver):
         return False
 
 
+def detect_like_restriction(driver):
+    """检测点赞后是否遇到风控弹窗"""
+    try:
+        restriction_selectors = [
+            "//span[contains(text(), '你暂时无法使用这个功能')]",
+            "//span[contains(text(), '你暂时无法使用这项功能')]",
+            "//span[contains(text(), 'temporarily unable to use this feature')]",
+            "//span[contains(text(), '操作过于频繁')]",
+            "//span[contains(text(), '请稍后再试')]",
+            "//span[contains(text(), 'try again later')]",
+            "//span[contains(text(), '暂时限制')]",
+            "//span[contains(text(), 'temporarily restricted')]",
+            "//span[contains(text(), '你的账号被暂时限制')]",
+            "//span[contains(text(), 'your account has been temporarily')]",
+            "//div[contains(text(), '你暂时无法使用这个功能')]",
+            "//div[contains(text(), '你暂时无法使用这项功能')]",
+        ]
+        for selector in restriction_selectors:
+            try:
+                elements = driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    if element.is_displayed():
+                        text = element.text.strip()
+                        logger.warning(f"检测到点赞风控: {text}")
+                        return True
+            except Exception:
+                continue
+        return False
+    except Exception:
+        return False
+
+
 def click_like(post_element, driver):
-    """点击赞按钮"""
+    """点击赞按钮，返回 (是否成功, 是否被风控)"""
     try:
         like_btn = post_element.find_element(By.XPATH,
             ".//div[@aria-label='赞' or @aria-label='Like'][@role='button']"
@@ -834,11 +868,28 @@ def click_like(post_element, driver):
         time.sleep(0.3)
         like_btn.click()
         logger.info("已点赞")
-        time.sleep(1)
-        return True
+        time.sleep(2)
+
+        # 点赞后检测风控
+        if detect_like_restriction(driver):
+            # 尝试关闭风控弹窗
+            try:
+                close_btns = driver.find_elements(By.XPATH,
+                    "//div[@aria-label='关闭' or @aria-label='Close'][@role='button']"
+                    " | //div[@role='button']//span[text()='确定' or text()='OK' or text()='好的']")
+                for btn in close_btns:
+                    if btn.is_displayed():
+                        btn.click()
+                        time.sleep(1)
+                        break
+            except Exception:
+                pass
+            return True, True  # 点赞成功但被风控
+
+        return True, False  # 点赞成功无风控
     except Exception as e:
         logger.warning(f"点赞失败: {e}")
-        return False
+        return False, False
 
 
 def human_scroll(driver, pixels=None):
@@ -966,11 +1017,17 @@ def process_single_post(post_element, driver, page_name, account_name=None):
                     post_data["action_not_interested"] = True
         random_delay()
 
-    # 10. 30%概率点赞
-    if random.random() < LIKE_PROBABILITY:
+    # 10. 0.5%概率点赞（被风控的账号跳过）
+    if account_name and account_name in _like_disabled_accounts:
+        logger.info(f"[{account_name}] 该账号已被风控，跳过点赞")
+    elif random.random() < LIKE_PROBABILITY:
         update_status(last_action=f"点赞 - {post_id}")
-        if click_like(post_element, driver):
+        liked, restricted = click_like(post_element, driver)
+        if liked:
             post_data["action_liked"] = True
+        if restricted and account_name:
+            _like_disabled_accounts.add(account_name)
+            logger.warning(f"[{account_name}] 点赞遇到风控，已停止该账号的点赞功能")
         random_delay()
 
     # 11. 保存到数据库
