@@ -511,6 +511,51 @@ def get_sending_status():
         return jsonify({"success": True, "data": {"running": False, "accounts": {}}})
 
 
+@app.route('/api/sending/tasks')
+def get_sending_tasks():
+    """获取发送任务详情列表（含帖子链接、用户主页、生成内容）"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    status_filter = request.args.get('status', '')
+    task_type = request.args.get('task_type', '')
+    account_id = request.args.get('account_id', '', type=str)
+
+    session = get_session()
+    try:
+        query = session.query(SendTask).order_by(SendTask.created_at.desc())
+        if status_filter:
+            query = query.filter(SendTask.status == status_filter)
+        if task_type:
+            query = query.filter(SendTask.task_type == task_type)
+        if account_id:
+            query = query.filter(SendTask.account_id == int(account_id))
+
+        total = query.count()
+        tasks = query.offset((page - 1) * per_page).limit(per_page).all()
+
+        result = []
+        for t in tasks:
+            task_dict = t.to_dict()
+            # 附加帖子信息
+            if t.post:
+                task_dict["post_url"] = t.post.post_url
+                task_dict["post_content"] = (t.post.content or "")[:200]
+                task_dict["author_name"] = t.post.author_name
+                task_dict["author_id"] = t.post.author_id
+                task_dict["author_profile_url"] = t.post.author_profile_url
+            result.append(task_dict)
+
+        return jsonify({
+            "success": True,
+            "data": result,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        })
+    finally:
+        session.close()
+
+
 # ============ 统计面板 API ============
 @app.route('/api/stats/dashboard')
 def get_dashboard_stats():

@@ -4,7 +4,7 @@
 import time
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from config import SEND_COOLDOWN_SECONDS
 from models import get_session, Account, SendTask, PostAction, WhatsAppAccount, Post
@@ -83,6 +83,22 @@ def get_next_task(account_id):
         account = session.query(Account).filter(Account.id == account_id).first()
         if not account:
             return None
+
+        # 检查24小时消息限制
+        if account.rate_limited_until:
+            rate_limited_until = account.rate_limited_until
+            if rate_limited_until.tzinfo is None:
+                rate_limited_until = rate_limited_until.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) < rate_limited_until:
+                remaining_h = (rate_limited_until - datetime.now(timezone.utc)).total_seconds() / 3600
+                logger.debug(f"[{account.name}] 24小时消息限制中，还需等待 {remaining_h:.1f}h")
+                return None
+            else:
+                # 限制已过期，清除标记
+                account.rate_limited_until = None
+                account.status = 'active'
+                session.commit()
+                logger.info(f"[{account.name}] 24小时消息限制已解除")
 
         # 检查冷却时间
         if account.last_task_at:
@@ -228,6 +244,22 @@ def execute_task(task_info, sender_engine):
             account.last_task_at = datetime.now(timezone.utc)
             if not success and '被限制' in (detail or ''):
                 account.status = 'banned'
+            # 检测24小时消息限制标记
+            if not success and 'RATE_LIMITED' in (detail or ''):
+                account.rate_limited_until = datetime.now(timezone.utc) + timedelta(hours=24)
+                account.status = 'rate_limited'
+                logger.warning(f"[{account_name}] 触发24小时消息限制，暂停至 {account.rate_limited_until}")
+                # 将该账号的所有pending DM任务标记为skipped
+                pending_dm_tasks = session.query(SendTask).filter(
+                    SendTask.account_id == account_id,
+                    SendTask.task_type == 'dm',
+                    SendTask.status == 'pending'
+                ).all()
+                for t in pending_dm_tasks:
+                    t.status = 'skipped'
+                    t.error_message = '24小时消息限制'
+                    t.completed_at = datetime.now(timezone.utc)
+                logger.info(f"[{account_name}] 已跳过 {len(pending_dm_tasks)} 个待发DM任务")
 
         # 同步写入post_actions表
         action = PostAction(
