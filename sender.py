@@ -19,27 +19,48 @@ logger = logging.getLogger(__name__)
 
 
 def detect_sending_restriction(driver):
-    """检测是否遇到发送限制"""
+    """检测是否遇到发送限制（多语言支持）"""
     try:
-        restriction_selectors = [
-            "//span[contains(text(), '你暂时无法使用这项功能')]",
-            "//span[contains(text(), 'temporarily unable to use this feature')]",
-            "//span[contains(text(), '你已达到陌生消息数量上限')]",
-            "//span[contains(text(), '陌生消息已达到上限')]",
-            "//span[contains(text(), 'stranger message limit')]",
-            "//span[contains(text(), '发送频率过快')]",
-            "//span[contains(text(), '请稍后再试')]",
-            "//span[contains(text(), 'try again later')]",
-            "//span[contains(text(), '评论功能暂时不可用')]",
-            "//span[contains(text(), 'commenting is temporarily unavailable')]",
-            "//span[contains(text(), '操作过于频繁')]",
-            "//span[contains(text(), '暂时限制')]",
-            "//span[contains(text(), 'temporarily restricted')]",
-            "//span[contains(text(), 'rate limited')]",
+        # 使用contains匹配，覆盖span和div，支持多语言
+        restriction_keywords = [
+            # 中文
+            '你暂时无法使用这项功能', '你暂时无法使用这个功能',
+            '你已达到陌生消息数量上限', '陌生消息已达到上限',
+            '发送频率过快', '请稍后再试', '操作过于频繁', '暂时限制',
+            '评论功能暂时不可用', '消息请求次数已达上限', '消息请求上限',
+            '已达到消息请求限制',
+            # 英文
+            'temporarily unable to use this feature',
+            'stranger message limit', 'try again later',
+            'temporarily restricted', 'rate limited',
+            'commenting is temporarily unavailable',
+            'reached the message request limit',
+            'limit to how many requests you can send',
+            'message request limit',
+            "You've reached the message request limit",
+            # 法语
+            'limite de demandes de message',
+            'temporairement restreint',
+            # 西班牙语
+            'límite de solicitudes de mensaje',
+            'temporalmente restringido',
+            # 葡萄牙语
+            'limite de solicitações de mensagem',
+            'temporariamente restrito',
+            # 阿拉伯语
+            'حد طلبات الرسائل',
+            # 土耳其语
+            'mesaj istek sınırına ulaştınız',
+            'geçici olarak kısıtlandı',
+            # 越南语
+            'giới hạn yêu cầu tin nhắn',
+            # 印尼语/马来语
+            'batas permintaan pesan',
         ]
 
-        for selector in restriction_selectors:
+        for kw in restriction_keywords:
             try:
+                selector = f"//*[contains(text(), '{kw}')]"
                 elements = driver.find_elements(By.XPATH, selector)
                 for element in elements:
                     if element.is_displayed():
@@ -53,6 +74,40 @@ def detect_sending_restriction(driver):
     except Exception as e:
         logger.error(f"检测发送限制时出错: {e}")
         return False, None
+
+
+def detect_message_rate_limit(driver):
+    """专门检测24小时消息请求限制（返回 True 表示已达上限需要停发24h）"""
+    rate_limit_keywords = [
+        # 英文
+        'reached the message request limit',
+        'limit to how many requests you can send',
+        'message request limit',
+        # 中文
+        '已达到消息请求限制', '消息请求次数已达上限',
+        '你已达到陌生消息数量上限', '陌生消息已达到上限',
+        # 法语
+        'limite de demandes de message',
+        # 西班牙语
+        'límite de solicitudes de mensaje',
+        # 葡萄牙语
+        'limite de solicitações de mensagem',
+        # 土耳其语
+        'mesaj istek sınırına ulaştınız',
+    ]
+    try:
+        for kw in rate_limit_keywords:
+            try:
+                elements = driver.find_elements(By.XPATH, f"//*[contains(text(), '{kw}')]")
+                for element in elements:
+                    if element.is_displayed():
+                        logger.warning(f"检测到24小时消息限制: {element.text.strip()}")
+                        return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
 
 
 class SenderEngine:
@@ -223,10 +278,25 @@ class SenderEngine:
 
             self.driver.execute_script("arguments[0].innerHTML = '';", comment_box)
 
-            # 逐字符输入
-            for char in comment_text:
-                comment_box.send_keys(char)
-                time.sleep(random.uniform(0.05, 0.15))
+            # 逐字符输入（带JS兜底）
+            try:
+                for char in comment_text:
+                    comment_box.send_keys(char)
+                    time.sleep(random.uniform(0.05, 0.15))
+            except Exception as input_err:
+                logger.warning(f"[{self.account_name}] send_keys失败: {input_err}, 使用JS注入")
+                try:
+                    self.driver.execute_script("""
+                        var el = arguments[0];
+                        el.focus();
+                        el.textContent = arguments[1];
+                        var evt = new InputEvent('input', {bubbles: true, cancelable: true});
+                        el.dispatchEvent(evt);
+                    """, comment_box, comment_text)
+                    time.sleep(1)
+                except Exception as js_err:
+                    logger.error(f"[{self.account_name}] JS注入也失败: {js_err}")
+                    return False, f"输入评论失败: {js_err}"
 
             time.sleep(2)
 
@@ -244,9 +314,14 @@ class SenderEngine:
             if is_restricted:
                 return False, f"评论被限制: {restriction_text}"
 
-            # 尝试点击发布按钮
+            # 尝试点击发布按钮（多语言）
             try:
-                post_buttons = self.driver.find_elements(By.XPATH, "//div[@aria-label='发布']")
+                post_buttons = self.driver.find_elements(By.XPATH,
+                    "//div[@aria-label='发布' or @aria-label='Post' or @aria-label='Submit'"
+                    " or @aria-label='Publier' or @aria-label='Publicar'"
+                    " or @aria-label='Yayınla' or @aria-label='Đăng'"
+                    " or @aria-label='Kirim' or @aria-label='نشر']"
+                )
                 for button in post_buttons:
                     if button.is_displayed():
                         self.driver.execute_script("arguments[0].click();", button)
@@ -282,9 +357,15 @@ class SenderEngine:
             if is_restricted:
                 return False, f"私信被限制: {restriction_text}"
 
-            # 关闭已有聊天窗口
+            # 关闭已有聊天窗口（多语言）
             try:
-                close_buttons = self.driver.find_elements(By.XPATH, "//div[@aria-label='关闭聊天窗口']")
+                close_buttons = self.driver.find_elements(By.XPATH,
+                    "//div[@aria-label='关闭聊天窗口' or @aria-label='Close chat'"
+                    " or @aria-label='Fermer' or @aria-label='Cerrar'"
+                    " or @aria-label='Fechar' or @aria-label='Kapat'"
+                    " or @aria-label='Đóng' or @aria-label='Tutup'"
+                    " or @aria-label='إغلاق']"
+                )
                 for button in close_buttons:
                     if button.is_displayed():
                         self.driver.execute_script("arguments[0].click();", button)
@@ -293,12 +374,20 @@ class SenderEngine:
             except Exception:
                 pass
 
-            # 点击发消息按钮
-            message_buttons = self.driver.find_elements(By.XPATH,
-                "//span[text()='发消息' or text()='Message']")
+            # 点击发消息按钮（多语言）
+            msg_btn_labels = [
+                '发消息', 'Message', 'Envoyer un message',
+                'Mensaje', 'Mensagem', 'Mesaj Gönder',
+                'Nhắn tin', 'Pesan', 'رسالة',
+            ]
+            span_conds = " or ".join([f"text()='{lbl}'" for lbl in msg_btn_labels])
+            message_buttons = self.driver.find_elements(By.XPATH, f"//span[{span_conds}]")
             if not message_buttons:
-                message_buttons = self.driver.find_elements(By.XPATH,
-                    "//div[contains(text(), '发消息') or contains(text(), 'Message')]")
+                div_conds = " or ".join([f"contains(text(), '{lbl}')" for lbl in msg_btn_labels])
+                message_buttons = self.driver.find_elements(By.XPATH, f"//div[{div_conds}]")
+            if not message_buttons:
+                aria_conds = " or ".join([f"@aria-label='{lbl}'" for lbl in msg_btn_labels])
+                message_buttons = self.driver.find_elements(By.XPATH, f"//div[{aria_conds}]")
 
             if not message_buttons:
                 return False, "未找到发消息按钮"
@@ -316,11 +405,16 @@ class SenderEngine:
             if is_restricted:
                 return False, f"私信被限制: {restriction_text}"
 
-            # 查找消息输入框
+            # 检测24小时消息限制
+            if detect_message_rate_limit(self.driver):
+                return False, "RATE_LIMITED:已达到24小时消息请求上限"
+
+            # 查找消息输入框（多语言）
             message_input = None
             input_selectors = [
                 "//div[@aria-label='发消息' and @contenteditable='true']",
                 "//div[@aria-label='Message' and @contenteditable='true']",
+                "//div[@aria-label='Aa' and @contenteditable='true']",
                 "//div[@role='textbox' and @contenteditable='true']",
                 "//div[@data-lexical-editor='true']",
             ]
@@ -358,22 +452,39 @@ class SenderEngine:
             self.driver.execute_script("arguments[0].innerHTML = '';", message_input)
             time.sleep(1)
 
-            # 逐字符输入（支持多行）
-            lines = message_text.split('\n')
-            if lines:
-                for char in lines[0]:
-                    actions = ActionChains(self.driver)
-                    actions.send_keys(char).perform()
-                    time.sleep(random.uniform(0.05, 0.15))
+            # 逐字符输入（支持多行，带JS兜底）
+            try:
+                lines = message_text.split('\n')
+                if lines:
+                    for char in lines[0]:
+                        actions = ActionChains(self.driver)
+                        actions.send_keys(char).perform()
+                        time.sleep(random.uniform(0.05, 0.15))
 
-            for line in lines[1:]:
-                actions = ActionChains(self.driver)
-                actions.key_down(Keys.SHIFT).send_keys(Keys.ENTER).key_up(Keys.SHIFT).perform()
-                time.sleep(0.5)
-                for char in line:
+                for line in lines[1:]:
                     actions = ActionChains(self.driver)
-                    actions.send_keys(char).perform()
-                    time.sleep(random.uniform(0.05, 0.15))
+                    actions.key_down(Keys.SHIFT).send_keys(Keys.ENTER).key_up(Keys.SHIFT).perform()
+                    time.sleep(0.5)
+                    for char in line:
+                        actions = ActionChains(self.driver)
+                        actions.send_keys(char).perform()
+                        time.sleep(random.uniform(0.05, 0.15))
+            except Exception as input_err:
+                logger.warning(f"[{self.account_name}] DM send_keys失败: {input_err}, 使用JS注入")
+                try:
+                    # 将换行转为<br>用于contenteditable
+                    html_text = message_text.replace('\n', '<br>')
+                    self.driver.execute_script("""
+                        var el = arguments[0];
+                        el.focus();
+                        el.innerHTML = arguments[1];
+                        var evt = new InputEvent('input', {bubbles: true, cancelable: true});
+                        el.dispatchEvent(evt);
+                    """, message_input, html_text)
+                    time.sleep(1)
+                except Exception as js_err:
+                    logger.error(f"[{self.account_name}] DM JS注入也失败: {js_err}")
+                    return False, f"输入私信失败: {js_err}"
 
             time.sleep(2)
 
@@ -382,9 +493,14 @@ class SenderEngine:
             if is_restricted:
                 return False, f"私信被限制: {restriction_text}"
 
-            # 点击发送按钮或按Enter
+            # 点击发送按钮或按Enter（多语言）
             send_buttons = self.driver.find_elements(By.XPATH,
-                "//div[@aria-label='按 Enter 键发送' or @aria-label='Press Enter to send']")
+                "//div[@aria-label='按 Enter 键发送' or @aria-label='Press Enter to send'"
+                " or @aria-label='Appuyez sur Entrée pour envoyer'"
+                " or @aria-label='Presiona Enter para enviar'"
+                " or @aria-label='Gönder' or @aria-label='Gửi'"
+                " or @aria-label='Kirim' or @aria-label='إرسال']"
+            )
             if send_buttons:
                 for button in send_buttons:
                     if button.is_displayed():
@@ -397,10 +513,14 @@ class SenderEngine:
 
             time.sleep(5)
 
-            # 发送后检测
+            # 发送后检测一般限制
             is_restricted, restriction_text = detect_sending_restriction(self.driver)
             if is_restricted:
                 return False, f"私信被限制: {restriction_text}"
+
+            # 专门检测24小时消息限制
+            if detect_message_rate_limit(self.driver):
+                return False, "RATE_LIMITED:已达到24小时消息请求上限"
 
             logger.info(f"[{self.account_name}] 私信发送成功")
             return True, "已私信"
@@ -427,12 +547,30 @@ class SenderEngine:
             # 关闭遮罩层
             dismiss_overlay(self.driver)
 
-            # 查找添加好友按钮
+            # 查找添加好友按钮（多语言）
+            add_friend_labels = [
+                '添加好友', '加为好友', 'Add Friend', 'Add friend',
+                'Ajouter', 'Agregar',  # 法语/西班牙语
+                'Adicionar',  # 葡萄牙语
+                'Arkadaş Ekle',  # 土耳其语
+                'Thêm bạn bè',  # 越南语
+                'Tambah Teman',  # 印尼语
+                'إضافة صديق',  # 阿拉伯语
+            ]
+            # 构建XPath: span精确匹配
+            span_conditions = " or ".join([f"text()='{lbl}'" for lbl in add_friend_labels])
             add_friend_buttons = self.driver.find_elements(By.XPATH,
-                "//span[text()='添加好友' or text()='加为好友' or text()='Add Friend']")
+                f"//span[{span_conditions}]")
+            # 兜底: div contains匹配
             if not add_friend_buttons:
+                div_conditions = " or ".join([f"contains(text(), '{lbl}')" for lbl in add_friend_labels])
                 add_friend_buttons = self.driver.find_elements(By.XPATH,
-                    "//div[contains(text(), '添加好友') or contains(text(), '加为好友') or contains(text(), 'Add Friend')]")
+                    f"//div[{div_conditions}]")
+            # 再兜底: aria-label匹配
+            if not add_friend_buttons:
+                aria_conditions = " or ".join([f"@aria-label='{lbl}'" for lbl in add_friend_labels])
+                add_friend_buttons = self.driver.find_elements(By.XPATH,
+                    f"//div[{aria_conditions}]")
 
             if add_friend_buttons:
                 for button in add_friend_buttons:

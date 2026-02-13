@@ -64,12 +64,6 @@ MONITOR_PAGES = [
         "url": "https://www.facebook.com/?filter=groups&sk=h_chr",
         "refresh_type": "groups_link",  # 点击小组链接刷新
     },
-    {
-        "name": "search",
-        "label": "搜索帖子",
-        "url": build_fb_today_url(),  # 动态生成当日搜索URL
-        "refresh_type": "search_refilter",  # 重新筛选刷新
-    },
 ]
 
 # ============ 监控参数 ============

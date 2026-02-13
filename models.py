@@ -47,6 +47,7 @@ class Account(Base):
     status = Column(String(32), default='active')  # "active" / "banned" / "paused"
     whatsapp_account_id = Column(Integer, ForeignKey('whatsapp_accounts.id'), nullable=True)  # 仅sender使用
     last_task_at = Column(DateTime, nullable=True)  # 上次发送时间(频率限制用)
+    rate_limited_until = Column(DateTime, nullable=True)  # 消息限制解除时间(24小时后自动恢复)
     enabled = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
@@ -71,6 +72,7 @@ class Account(Base):
             "whatsapp_account_id": self.whatsapp_account_id,
             "whatsapp_phone": self.whatsapp_account.phone_number if self.whatsapp_account else None,
             "last_task_at": self.last_task_at.isoformat() if self.last_task_at else None,
+            "rate_limited_until": self.rate_limited_until.isoformat() if self.rate_limited_until else None,
             "enabled": self.enabled,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

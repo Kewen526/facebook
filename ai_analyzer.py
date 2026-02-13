@@ -12,144 +12,204 @@ logger = logging.getLogger(__name__)
 # AI分析提示词模板
 PROMPT_TEMPLATE = """请对以下帖子做角色与需求识别，判断发帖人是否属于有"从中国采购并发货到国外"需求的**潜在代发客户（买家）**。
 
-⚠️ 核心判断原则：只有**买家**才是目标客户，**卖家/供应商/服务商/平台推广**统统判"否"。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 核心原则（必须牢记）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚠️ 重要提醒 - 区分正文与非正文：
-输入内容中可能混入**小组名称**或**用户昵称**，这些不是帖子正文！
-- 例如小组名 "Dropshipping Worldwide" 或用户名 "Shopify Expert John" 包含关键词，但不代表帖子内容与代发相关
-- 你必须**只根据帖子正文内容**进行判定，忽略小组名称、用户昵称等非正文信息
-- 如果正文内容很短、无实质含义或只是产品展示（无采购意图），应判"否"
+1. **只有买家才是目标客户**：卖家/供应商/服务商/平台推广/中间商找客户 → 一律判"否"
+2. **默认判"否"**：当信息不足、帖子含义模糊、无法确认买家身份时，默认判"否"。宁可漏判，不可错判
+3. **只分析正文**：忽略小组名称、用户昵称、页面标题、话题标签等非正文信息
+4. **语言无关**：帖子可能使用任何语言，判定逻辑适用于所有语言
 
-输入内容：
-文本内容：{用户原文}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 分析流程（短路逻辑，命中即停）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-分析要求：
+**第一步：内容有效性筛查 → 无效则直接判"否"**
 
-**第一步：区分正文与非正文**
-- 识别输入中哪些是帖子正文，哪些是小组名称/用户昵称/页面标题等非正文信息
-- 只对帖子正文进行分析判定
+以下情况直接判"否"，无需进入后续步骤：
+- 正文过短（< 10个实义词），无实质含义
+- 只有产品名称/参数/图片描述，无任何人称表达
+- 纯转发/分享链接，无个人表达
+- 与商业完全无关（交友/征婚/社交/娱乐/新闻）
+- OCR提取的水印、标签、广告文字（非发帖人原话）
 
-**第二步：角色判定（最关键）**
+**第二步：角色判定（最关键）→ 非买家则直接判"否"**
 
-✅ **买家（潜在客户）= 判"是"**：
-发帖人自身有采购需求，想从中国买东西/找供应商/找代发服务。特征：
-- 用第一人称表达需求："I'm looking for…" / "I need…" / "I want to buy…"
-- 在寻找供应商/代理："looking for supplier" / "anyone can source…" / "need an agent"
-- 明确提到要从中国发货到某国："ship from China to…" / "sourcing from China"
-- 询问价格/物流："how much…" / "shipping cost to…" / "delivery time"
+首先排除卖家/服务商/中间商，因为这类帖子远多于买家帖：
 
-❌ **卖家/供应商/服务商 = 判"否"**：
-发帖人自己在提供产品或服务，而非寻求采购。特征：
-- 宣传自己的产品/服务："we offer" / "I supply" / "DM me" / "contact us"
-- 展示库存/价格："in stock" / "wholesale price" / "MOQ" / "ready to ship"
-- Dropshipping服务商宣传："we provide dropshipping service" / "fulfillment center"
-- 物流公司推广："shipping line" / "freight forwarding" / "logistics solution"
-- 电商平台/工具推广："Shopify expert" / "store setup" / "marketing service"
-- 招聘/招商："hiring" / "join our team" / "become our agent"
-- 展示成功案例/教程："how to start dropshipping" / "my store made $X"
-- 产品广告/产品展示帖（只展示产品参数、价格，无采购意图）
-- ⚠️ **卖家在寻找客户**："寻找更多客户" / "looking for customers" / "扩大规模" / "expand business" → 这是卖家行为，不是买家！
-- 提供WhatsApp/微信等联系方式招揽生意 → 卖家
-- 提供批量/批发销售："bulk quantity" / "wholesale available" / "retail and wholesale" / "available in wholesale"
-- 品牌名称+联系方式组合：通常是卖家在推广自己的品牌
-- 邀请联系购买："DM for orders" / "contact for pricing" / "direct message for bulk" / "please contact wholesalers"
+❌ 以下任一特征命中 → 判"否"（卖家/供应商/服务商）：
 
-❌ **与代发业务完全无关的帖子 = 判"否"**：
-- 交友/征婚/社交帖："looking for partner/relationship" / "寻找伴侣"
-- 个人生活分享、娱乐、新闻
-- 讨论市场趋势、分享行业新闻/教程
-- 没有明确的个人采购意图
-- 正文内容过短、无实质含义、只有产品名称无采购表达
+| 类别 | 典型特征 |
+|------|----------|
+| **自我推销** | "we offer/provide/supply"、"DM me/us"、"contact us"、"inbox me" |
+| **展示库存** | "in stock"、"ready to ship"、"available"、"MOQ"、"wholesale price" |
+| **招揽客户** | "looking for customers/buyers/clients"、"寻找客户"、"expand business"、"扩大规模" |
+| **提供服务** | "we provide dropshipping/fulfillment/shipping service"、"free consultation" |
+| **推广工具/平台** | "store setup"、"Shopify expert"、"marketing service"、"how to start…" |
+| **留联系方式招商** | 品牌名+WhatsApp/微信号组合、"DM for orders/pricing"、"contact for catalog" |
+| **批发销售** | "wholesale available"、"bulk quantity"、"retail and wholesale" |
+| **物流推广** | "shipping line"、"freight forwarding"、"logistics solution" |
+| **招聘/招商** | "hiring"、"join our team"、"become our agent/reseller" |
+| **教程/案例** | "how to start dropshipping"、"my store made $X"、成功案例分享 |
+| **产品广告** | 仅展示产品图片+参数+价格，无采购意图表达 |
 
-**第三步：需求验证**
-即使角色是买家，还需确认：
-1. 是否有从中国采购的意图（而非本地采购）
-2. 是否有跨境发货需求（发往中国以外的国家）
-3. 产品是否适合代发（非大宗原材料/危险品等）
+⚠️ 特别注意：
+- "looking for partner/collaboration" 如果上下文是卖家找分销渠道 → 判"否"
+- "寻找合作" 如果发帖人同时展示了自己的产品/服务 → 判"否"（是卖家找渠道）
+- 发帖人展示产品+问"anyone interested?" → 这是卖家在试探市场，判"否"
 
-输出格式（必须严格遵守）：
+✅ 确认买家的核心特征（必须同时满足以下条件）：
 
-判定结果：是
-或
-判定结果：否
+条件A - **第一人称采购意图**（必须）：
+- "I'm looking for…" / "I need…" / "I want to buy/source…" / "我想找…" / "我需要…"
+- "Can anyone help me find…" / "Does anyone know where to get…"
+- "Where can I buy…" / "Who sells…"
+
+条件B - **中国采购或跨境发货相关**（至少命中一个）：
+- 明确提到中国/China/1688/Alibaba/Taobao等中国平台
+- 提到从中国发货到其他国家："ship from China to…" / "sourcing from China"
+- 在代发/dropshipping相关讨论上下文中表达采购需求
+- 询问中国供应商/代理："supplier in China" / "China agent" / "sourcing agent"
+
+条件C - **产品适合代发**（排除不适合的）：
+- 排除大宗原材料（钢材、矿石等）
+- 排除危险品/违禁品
+- 排除大型工业设备
+- 一般消费品、电子产品、服装、家居用品等 → 适合
+
+**三个条件全部满足 → 判"是"；任一不满足 → 判"否"**
+
+**第三步：模糊情况兜底处理**
+
+如果经过上述分析仍无法确定：
+- 帖子既不像卖家也不像明确的买家 → 判"否"
+- 表达了兴趣但未明确采购意图（如"this looks cool"）→ 判"否"
+- 讨论市场趋势/行业话题但无个人采购需求 → 判"否"
+- 问价但看不出是买家还是同行打探 → 判"否"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 输出格式（必须严格遵守）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+判定结果：是/否
 
 判定依据：
-1. 角色判定：发帖人是买家/卖家/服务商/信息分享
-2. 关键表达匹配：找出文本中的关键表达
-3. 需求明确性：用户是否明确表达了从中国采购代发的需求
-4. 综合结论：简要说明判定理由
+1. 内容有效性：[正文是否有效/是否混入非正文内容]
+2. 角色判定：[买家/卖家/服务商/无关] + 判定理由
+3. 关键表达：[列出决定性的关键词句]
+4. 需求匹配：[是否满足条件A+B+C]
+5. 综合结论：[一句话总结]
 
-示例1（是）：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 示例
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【示例1 - 是：典型买家】
 输入：I am looking for heated slippers to ship to Europe, anyone know a good supplier in China?
 判定结果：是
 判定依据：
-1. 角色判定：买家 - 第一人称表达采购需求
-2. 关键表达匹配："looking for" + "ship to Europe" + "supplier in China"
-3. 需求明确性：明确需要从中国采购加热拖鞋并发往欧洲
-4. 综合结论：典型的中国代发潜在客户
+1. 内容有效性：正文有效，内容完整
+2. 角色判定：买家 - 第一人称表达采购需求
+3. 关键表达："I am looking for" + "ship to Europe" + "supplier in China"
+4. 需求匹配：A(✓寻找产品) B(✓中国供应商+发欧洲) C(✓消费品适合代发)
+5. 综合结论：典型的中国代发潜在客户
 
-示例2（否 - 卖家）：
+【示例2 - 否：服务商推广】
 输入：🔥 Shopify Experts Dropshipping | We help you build your store and source products from China. DM for free consultation!
 判定结果：否
 判定依据：
-1. 角色判定：服务商 - 在推广自己的代发/建站服务
-2. 关键表达匹配："We help you" + "DM for" = 典型卖家/服务商话术
-3. 需求明确性：发帖人不是在寻找服务，而是在提供服务
-4. 综合结论：服务商推广帖，不是目标客户
+1. 内容有效性：正文有效
+2. 角色判定：服务商 - 推广建站+代发服务
+3. 关键表达："We help you" + "DM for" = 服务商话术
+4. 需求匹配：不适用（非买家）
+5. 综合结论：服务商推广帖
 
-示例3（否 - 供应商）：
+【示例3 - 否：供应商广告】
 输入：High quality phone cases wholesale, MOQ 50pcs, ready to ship worldwide! Contact me for catalog.
 判定结果：否
 判定依据：
-1. 角色判定：供应商/卖家 - 在展示自己的产品
-2. 关键表达匹配："wholesale" + "MOQ" + "ready to ship" + "Contact me" = 供应商话术
-3. 需求明确性：发帖人是在卖货，不是在找供应商
-4. 综合结论：供应商推广帖，不是目标客户
+1. 内容有效性：正文有效
+2. 角色判定：供应商 - 展示产品+招揽订单
+3. 关键表达："wholesale" + "MOQ" + "ready to ship" + "Contact me"
+4. 需求匹配：不适用（非买家）
+5. 综合结论：供应商广告帖
 
-示例4（否 - 小组名称干扰）：
+【示例4 - 否：产品展示（无采购意图）】
 输入：MAGA A/T TWO\nAll-terrain design\nAll-terrain four season tire pattern, more strengthful tread block design
 判定结果：否
 判定依据：
-1. 角色判定：卖家 - 在展示轮胎产品参数
-2. 关键表达匹配：仅有产品描述，无任何采购需求表达
-3. 需求明确性：无从中国采购代发的需求
-4. 综合结论：产品广告帖，不是目标客户
+1. 内容有效性：仅有产品参数描述，无人称表达
+2. 角色判定：产品广告 - 纯产品展示
+3. 关键表达：无采购相关表达
+4. 需求匹配：条件A不满足
+5. 综合结论：产品广告帖
 
-示例5（否 - 卖家寻找客户）：
+【示例5 - 否：卖家找客户】
 输入：另一个 eBay 账号——今日特卖！\n模式：两步代发货（库存模式）——按百分比计酬\n投资回报率：50% – 60%\n👉正在寻找更多客户以扩大规模！\n📱WhatsApp：+92348 8663404
 判定结果：否
 判定依据：
-1. 角色判定：卖家/服务商 - "寻找更多客户"说明是卖家在招揽生意
-2. 关键表达匹配："寻找更多客户" + "扩大规模" + 提供WhatsApp联系方式 = 典型卖家招客话术
-3. 需求明确性：发帖人是在推广自己的代发服务，不是在寻找供应商
-4. 综合结论：卖家在找客户，不是目标客户
+1. 内容有效性：正文有效
+2. 角色判定：卖家/服务商 - "寻找更多客户" = 卖家招客
+3. 关键表达："寻找更多客户" + "扩大规模" + WhatsApp联系方式
+4. 需求匹配：不适用（非买家）
+5. 综合结论：卖家招客帖
 
-示例6（否 - 交友/社交帖）：
+【示例6 - 否：交友帖】
 输入：I'm looking for a good partner for me, I don't care about your finances, I have a business, the most important thing is to be loyal
 判定结果：否
 判定依据：
-1. 角色判定：非商业帖 - 这是一条交友/征婚帖
-2. 关键表达匹配："looking for a good partner" 指的是寻找伴侣，不是商业合作伙伴
-3. 需求明确性：与中国采购代发完全无关
-4. 综合结论：交友帖，不是目标客户
+1. 内容有效性：正文有效，但非商业内容
+2. 角色判定：非商业帖 - 交友/征婚
+3. 关键表达："partner" = 伴侣，"loyal" = 忠诚，与商业无关
+4. 需求匹配：与代发业务完全无关
+5. 综合结论：交友帖
 
-示例7（否 - 批发卖家）：
+【示例7 - 否：批发卖家】
 输入：Quality jacket's hoodies available in wholesale and retail shipping worldwide
 判定结果：否
 判定依据：
-1. 角色判定：卖家/供应商 - 在宣传自己的服装产品
-2. 关键表达匹配："available" + "wholesale and retail" + "shipping worldwide" = 产品供应商广告
-3. 需求明确性：发帖人是在出售商品，而非寻找供应商
-4. 综合结论：批发卖家广告帖，不是目标客户
+1. 内容有效性：正文有效
+2. 角色判定：卖家 - 宣传自己的产品
+3. 关键表达："available" + "wholesale and retail" + "shipping worldwide"
+4. 需求匹配：不适用（非买家）
+5. 综合结论：批发卖家广告
 
-示例8（否 - 鞋类卖家/零售商）：
-输入：DRIECT MESSAGE FOR BULK QUANTITY. !!! Nagina Footwear. What's app 0346-84 786 92 Please Contact wholesalers or Shopkeepers.
+【示例8 - 否：模糊帖 - "找合作"但实为卖家】
+输入：We manufacture premium leather bags in Guangzhou. Looking for partners to distribute in Europe and US. WhatsApp: +86 138xxxx
 判定结果：否
 判定依据：
-1. 角色判定：卖家/供应商 - 在推广自己的鞋类产品并招揽批量订单
-2. 关键表达匹配："DIRECT MESSAGE FOR BULK QUANTITY" + 品牌名 + WhatsApp联系方式 = 典型供应商招商话术
-3. 需求明确性：发帖人是在销售产品，提供WhatsApp以接收订单
-4. 综合结论：产品卖家推广帖，不是目标客户"""
+1. 内容有效性：正文有效
+2. 角色判定：卖家/制造商 - "We manufacture" + 找分销渠道
+3. 关键表达："manufacture" + "looking for partners to distribute" = 卖家找渠道
+4. 需求匹配：不适用（非买家）
+5. 综合结论：制造商找分销渠道，非买家
+
+【示例9 - 是：非英语买家】
+输入：Je cherche un fournisseur en Chine pour des accessoires de téléphone, livraison en France. Qui peut m'aider?
+判定结果：是
+判定依据：
+1. 内容有效性：正文有效（法语）
+2. 角色判定：买家 - 第一人称寻找供应商
+3. 关键表达："Je cherche"(我在找) + "fournisseur en Chine"(中国供应商) + "livraison en France"(发往法国)
+4. 需求匹配：A(✓) B(✓中国供应商+发法国) C(✓手机配件适合代发)
+5. 综合结论：法语买家，寻找中国手机配件供应商
+
+【示例10 - 否：内容过短/无实质】
+输入：Nice products 👍
+判定结果：否
+判定依据：
+1. 内容有效性：正文过短，无实质采购意图
+2. 角色判定：无法判定 - 可能是评论/点赞
+3. 关键表达：无采购相关表达
+4. 需求匹配：条件A不满足
+5. 综合结论：无实质内容，默认判否
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+请分析以下帖子：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{用户原文}"""
 
 
 def get_zhipu_keys():
@@ -168,7 +228,7 @@ def get_zhipu_keys():
     return []
 
 
-def call_zhipu_api(api_key: str, prompt: str, max_retries: int = 1) -> Optional[str]:
+def call_zhipu_api(api_key: str, prompt: str, max_retries: int = 1, temperature: float = 0.7) -> Optional[str]:
     """调用ZhipuAI API"""
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -187,7 +247,7 @@ def call_zhipu_api(api_key: str, prompt: str, max_retries: int = 1) -> Optional[
             response = client.chat.completions.create(
                 model=ZHIPU_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
+                temperature=temperature,
                 max_tokens=4096,
                 top_p=0.95
             )
@@ -218,7 +278,7 @@ def call_zhipu_api(api_key: str, prompt: str, max_retries: int = 1) -> Optional[
     return None
 
 
-def analyze_with_ai(prompt: str) -> str:
+def analyze_with_ai(prompt: str, temperature: float = 0.7) -> str:
     """AI分析 - 使用ZhipuAI，多key轮询，必须出结果"""
     logger.info("开始AI分析...")
 
@@ -234,7 +294,7 @@ def analyze_with_ai(prompt: str) -> str:
         logger.info(f"第{round_num + 1}轮: 尝试 {len(keys)} 个密钥")
         for i, key in enumerate(keys):
             logger.info(f"尝试第{i + 1}个密钥...")
-            result = call_zhipu_api(key, prompt, max_retries=1)
+            result = call_zhipu_api(key, prompt, max_retries=1, temperature=temperature)
             if result:
                 logger.info("AI分析成功")
                 return result
@@ -302,71 +362,64 @@ def analyze_post(post_content: str) -> tuple:
 
 # ============ 内容生成提示词 ============
 
-COMMENT_PROMPT = """你是一位专业的跨境电商供应商助手，专门生成Facebook评论话术。
+COMMENT_PROMPT = """You are a professional sourcing agent from China writing a Facebook comment. Be creative and vary your wording every time.
+STRICT RULES: - Output ONLY in English. No Chinese characters allowed. - Do NOT include any name placeholder like [Name], [NAME], Hi [Name], etc. - Do NOT include any WhatsApp number. - Output ONLY the comment text. No explanation, no labels.
+STYLE GUIDE (follow this tone closely): - Write as a supplier agent who negotiates factory prices and handles fulfillment - Sound professional and genuine, like a real person — not a spammy ad - Keep it 2-3 sentences, under 50 words - Core message: factory price negotiation + reliable order fulfillment + honest communication - End with a soft call-to-action like: "Let's begin with a low quote." / "Let's start with a competitive offer." / "DM me to get started." - Do NOT use hype words like "amazing", "incredible", "best ever" - Do NOT use bullet points or list format
+GOOD EXAMPLES: - "We're a supplier agent focused on factory-level pricing and dependable delivery. We prefer clear and honest contact. Let's begin with a cost-effective offer." - "We help you deal with the factory to get the lowest cost and fast shipment. Honest communication reduces troubles. Let's begin with a low-budget offer." - "Hello, I am a Dropshipping agent from China. I can process orders for you, no MOQ, automatic upload tracking number, fast delivery worldwide. DM me if interested!"
+Generate 1 comment now:"""
 
-请生成1条Facebook评论：
-- 简短自然，像真人在评论，不像广告
-- 要让客户看到后有想回复或私信我的欲望
-- 结尾引导客户回复我或私信我，例如："DM me if interested!" / "Let's work together!" / "Feel free to message me!"
-- 不要问客户卖什么产品或针对什么市场
-- 强调：代发货、无最低起订量、价格有竞争力、快速发货
-- 可以提到：ERP系统、自动上传追踪号、售后服务、品牌定制包装
-- 不需要加WhatsApp号码
-- 不超过50字
+DM_WITH_WHATSAPP_PROMPT = """You are a professional sourcing agent from China writing a Facebook direct message. Be creative and vary your wording every time.
+My WhatsApp: {whatsapp_number}
+STRICT RULES: - Output ONLY in English. No Chinese characters allowed. - Do NOT include any name placeholder like [Name], [NAME], Hi [Name], Hello [Name], etc. Start directly without addressing a name. - The message MUST end with exactly: This is my WhatsApp. {whatsapp_number} - Output ONLY the message text. No explanation, no labels.
+STYLE GUIDE (follow this tone closely): - Write as a supplier agent who negotiates factory prices and handles fulfillment - Sound professional and genuine, like a real person — not a spammy ad or mass message - Keep the body 2-4 sentences (before the WhatsApp line), total under 80 words - Core message: factory price negotiation + reliable fulfillment + honest/timely communication - You may mention: no MOQ, fast global shipping, ERP system, Shopify integration, auto tracking upload, after-sales support, custom branding/packaging - End the body with a soft engagement line, then add the WhatsApp line - Do NOT use hype words or excessive emojis - Do NOT use bullet points or list format
+GOOD EXAMPLES: - "We're a supplier agent focused on factory-level pricing and dependable delivery. We prefer clear and honest contact. Let's begin with a cost-effective offer.\nThis is my WhatsApp. +86 158 5453 0808" - "Hi, I am a dropshipping supplier from China, I can provide products for you, fast shipping to all over the world, no MOQ. We have our own ERP system, which can link your shopify store, automatically process orders. Let's talk?\nThis is my WhatsApp. +86 158 5453 0808"
+Generate 1 direct message now:"""
 
-直接输出1条评论，不需要解释。"""
+DM_WITHOUT_WHATSAPP_PROMPT = """You are a professional sourcing agent from China writing a Facebook direct message. Be creative and vary your wording every time.
+STRICT RULES: - Output ONLY in English. No Chinese characters allowed. - Do NOT include any name placeholder like [Name], [NAME], Hi [Name], Hello [Name], etc. Start directly without addressing a name. - Do NOT include any WhatsApp number or phone number. - Output ONLY the message text. No explanation, no labels.
+STYLE GUIDE (follow this tone closely): - Write as a supplier agent who negotiates factory prices and handles fulfillment - Sound professional and genuine, like a real person — not a spammy ad or mass message - Keep it 2-4 sentences, under 70 words - Core message: factory price negotiation + reliable fulfillment + honest/timely communication - You may mention: no MOQ, fast global shipping, ERP system, Shopify integration, auto tracking upload, after-sales support, custom branding/packaging - End with a question or engagement line to encourage reply, e.g.: "Do you have any products that need to be quoted?" / "Let's start with a competitive offer?" / "Shall we talk?" - Do NOT use hype words or excessive emojis - Do NOT use bullet points or list format
+GOOD EXAMPLES: - "We're supplier agents helping you get the lowest possible cost and smooth logistics. Let's start with simple, honest communication and a good price." - "Hello, I am a dropshipping supplier from China with good price and fast shipping. We need a sincere shop owner, only in this way can we cooperate for a long time and grow together. If you're interested, let's talk?"
+Generate 1 direct message now:"""
 
-DM_WITH_WHATSAPP_PROMPT = """你是一位专业的跨境电商供应商助手，专门生成Facebook私信话术。
 
-我的WhatsApp账号：{whatsapp_number}
-
-请生成1条Facebook私信：
-- 友好自然，像真人发送，不像群发广告
-- 要让客户看到后有强烈想回复的欲望
-- 用提问句或悬念结尾，引发互动
-- 强调：代发货代理、工厂价格、无最低起订量、快速全球发货
-- 可以提到：ERP系统对接Shopify、自动上传追踪号、售后保障、品牌定制
-- 结尾必须加：This is my WhatsApp. {whatsapp_number}
-- 不超过100字
-
-直接输出1条私信，不需要解释。"""
-
-DM_WITHOUT_WHATSAPP_PROMPT = """你是一位专业的跨境电商供应商助手，专门生成Facebook私信话术。
-
-请生成1条Facebook私信：
-- 友好自然，像真人发送，不像群发广告
-- 要让客户看到后有强烈想回复的欲望
-- 用提问句或悬念结尾，引发互动
-- 强调：代发货代理、工厂价格、无最低起订量、快速全球发货
-- 可以提到：ERP系统对接Shopify、自动上传追踪号、售后保障、品牌定制
-- 不超过80字
-
-直接输出1条私信，不需要解释。"""
+def _clean_generated_text(text: str) -> str:
+    """清理AI生成内容：移除[Name]占位符、非BMP字符等"""
+    if not text:
+        return text
+    # 移除 [Name] / [NAME] / Hi [Name], / Hello [Name], 等占位符
+    text = re.sub(r'\[Name\]|\[NAME\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'(?:Hi|Hello|Dear|Hey)\s+\[?\w*\]?,?\s*', '', text)
+    # 移除非BMP字符（emoji等），防止ChromeDriver报错
+    text = re.sub(r'[^\u0000-\uffff]', '', text)
+    # 清理多余空格和空行
+    text = re.sub(r' {2,}', ' ', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
 
 
 def generate_comment(post_content: str) -> Optional[str]:
     """生成评论内容"""
     logger.info("生成评论内容...")
-    result = analyze_with_ai(COMMENT_PROMPT)
+    result = analyze_with_ai(COMMENT_PROMPT, temperature=0.9)
     if result and "判定结果" not in result:
-        return result.strip()
-    return result
+        return _clean_generated_text(result)
+    return _clean_generated_text(result) if result else result
 
 
 def generate_dm_with_whatsapp(post_content: str, whatsapp_number: str) -> Optional[str]:
     """生成带WhatsApp的私信内容"""
     logger.info(f"生成私信内容 (WhatsApp: {whatsapp_number})...")
     prompt = DM_WITH_WHATSAPP_PROMPT.replace("{whatsapp_number}", whatsapp_number)
-    result = analyze_with_ai(prompt)
+    result = analyze_with_ai(prompt, temperature=0.9)
     if result and "判定结果" not in result:
-        return result.strip()
-    return result
+        return _clean_generated_text(result)
+    return _clean_generated_text(result) if result else result
 
 
 def generate_dm_without_whatsapp(post_content: str) -> Optional[str]:
     """生成不带WhatsApp的私信内容"""
     logger.info("生成私信内容 (无WhatsApp)...")
-    result = analyze_with_ai(DM_WITHOUT_WHATSAPP_PROMPT)
+    result = analyze_with_ai(DM_WITHOUT_WHATSAPP_PROMPT, temperature=0.9)
     if result and "判定结果" not in result:
-        return result.strip()
-    return result
+        return _clean_generated_text(result)
+    return _clean_generated_text(result) if result else result

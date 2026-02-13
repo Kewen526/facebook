@@ -425,6 +425,62 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 发送详情 -->
+            <div class="mgmt-card">
+                <h3>
+                    发送详情
+                    <button class="btn btn-sm btn-primary" @click="loadSendingTasks()">刷新</button>
+                </h3>
+                <div class="filters" style="box-shadow:none; padding:8px 0;">
+                    <select class="filter-select" v-model="sendingTaskFilters.status" @change="loadSendingTasks()">
+                        <option value="">全部状态</option>
+                        <option value="completed">已完成</option>
+                        <option value="failed">失败</option>
+                        <option value="pending">待执行</option>
+                        <option value="in_progress">执行中</option>
+                        <option value="skipped">已跳过</option>
+                    </select>
+                    <select class="filter-select" v-model="sendingTaskFilters.task_type" @change="loadSendingTasks()">
+                        <option value="">全部类型</option>
+                        <option value="comment">评论</option>
+                        <option value="dm">私信</option>
+                        <option value="add_friend">加好友</option>
+                    </select>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="mgmt-table" v-if="sendingTasks.length > 0">
+                        <thead>
+                            <tr><th>账号</th><th>类型</th><th>状态</th><th>帖子链接</th><th>用户主页</th><th>生成内容</th><th>错误信息</th><th>时间</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="task in sendingTasks" :key="task.id">
+                                <td>{{ task.account_name }}</td>
+                                <td>{{ taskTypeLabel(task.task_type) }}</td>
+                                <td :class="'action-status-' + task.status">{{ task.status }}</td>
+                                <td><a v-if="task.post_url" :href="task.post_url" target="_blank" class="post-link" style="font-size:12px;">查看帖子</a><span v-else>-</span></td>
+                                <td>
+                                    <a v-if="task.author_id" :href="'https://www.facebook.com/' + task.author_id" target="_blank" class="post-link" style="font-size:12px;">
+                                        {{ task.author_name || task.author_id }}
+                                    </a>
+                                    <span v-else>-</span>
+                                </td>
+                                <td style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" :title="task.generated_text || ''">{{ task.generated_text ? task.generated_text.substring(0, 60) + '...' : '-' }}</td>
+                                <td style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#fa3e3e;" :title="task.error_message || ''">{{ task.error_message || '-' }}</td>
+                                <td style="font-size:12px; white-space:nowrap;">{{ formatDate(task.completed_at || task.created_at) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" v-if="sendingTasksTotal > 50" style="margin-top:12px;">
+                    <button class="btn btn-sm" :disabled="sendingTasksPage <= 1" @click="loadSendingTasks(sendingTasksPage - 1)">上一页</button>
+                    <span class="page-info">{{ sendingTasksPage }} / {{ Math.ceil(sendingTasksTotal / 50) }} (共 {{ sendingTasksTotal }} 条)</span>
+                    <button class="btn btn-sm" :disabled="sendingTasksPage >= Math.ceil(sendingTasksTotal / 50)" @click="loadSendingTasks(sendingTasksPage + 1)">下一页</button>
+                </div>
+                <div v-if="sendingTasks.length === 0" class="empty-state" style="padding:30px;">
+                    <p>暂无发送记录</p>
+                </div>
+            </div>
         </div>
 
         <!-- ====== 统计面板 ====== -->
@@ -617,6 +673,10 @@ createApp({
         const filters = ref({ source: '', is_target: '', search: '' });
         const newAccount = ref({ name: '', account_type: 'monitor', cookie_url: '' });
         const newWhatsApp = ref({ phone_number: '' });
+        const sendingTasks = ref([]);
+        const sendingTasksTotal = ref(0);
+        const sendingTasksPage = ref(1);
+        const sendingTaskFilters = ref({ status: '', task_type: '' });
         let statusTimer = null;
 
         const visiblePages = computed(() => {
@@ -685,6 +745,19 @@ createApp({
             const d = await fetchAPI('/api/sending/status');
             if (d && d.success) sendingStatus.value = d.data;
             await loadDashboard();
+            await loadSendingTasks();
+        }
+
+        async function loadSendingTasks(page = 1) {
+            sendingTasksPage.value = page;
+            const params = new URLSearchParams({ page, per_page: 50 });
+            if (sendingTaskFilters.value.status) params.set('status', sendingTaskFilters.value.status);
+            if (sendingTaskFilters.value.task_type) params.set('task_type', sendingTaskFilters.value.task_type);
+            const d = await fetchAPI(`/api/sending/tasks?${params}`);
+            if (d && d.success) {
+                sendingTasks.value = d.data;
+                sendingTasksTotal.value = d.total;
+            }
         }
 
         async function loadDashboard() {
@@ -829,7 +902,8 @@ createApp({
             status, stats, posts, logs, accounts, whatsappAccounts, sendingStatus, dashboardData,
             activeTab, selectedPost, loading, currentPage, totalPosts, totalPages, filters, visiblePages,
             newAccount, newWhatsApp,
-            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard,
+            sendingTasks, sendingTasksTotal, sendingTasksPage, sendingTaskFilters,
+            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks,
             startMonitor, stopMonitor, startSending, stopSending, refreshData, openPostDetail,
             createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie,
             createWhatsApp, deleteWhatsApp, toggleWhatsApp, getLinkedAccounts,

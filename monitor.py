@@ -21,7 +21,7 @@ from config import (
     SCROLL_WAIT_MIN, SCROLL_WAIT_MAX,
     ACTION_WAIT_MIN, ACTION_WAIT_MAX,
     POST_LOAD_TIMEOUT, INTEREST_CLICK_WAIT,
-    random_delay, build_fb_today_url, SEARCH_KEYWORD,
+    random_delay,
 )
 from models import is_post_exists, save_post, update_post_action, MonitorLog, get_session, Account
 from ai_analyzer import analyze_post
@@ -44,8 +44,6 @@ monitor_status = {
 
 # 跟踪每个监控线程
 _monitor_threads = {}
-# 跟踪搜索页面最后使用的URL（每个账号独立）
-_last_search_urls = {}
 # 被风控的账号 - 停止点赞
 _like_disabled_accounts = set()
 
@@ -249,14 +247,8 @@ def load_cookies(driver, cookies_file):
 
 
 def open_all_tabs(driver, account_name=None):
-    """打开三个监控页面的标签页"""
-    logger.info("打开三个监控标签页...")
-
-    # 生成当日搜索URL
-    search_url = build_fb_today_url(SEARCH_KEYWORD)
-    key = account_name or "_default"
-    _last_search_urls[key] = search_url
-    logger.info(f"当日搜索URL已生成: {search_url[:80]}...")
+    """打开监控页面的标签页（首页+小组）"""
+    logger.info("打开监控标签页...")
 
     # 第一个标签页 - 首页 (当前标签)
     driver.get(MONITOR_PAGES[0]["url"])
@@ -269,13 +261,6 @@ def open_all_tabs(driver, account_name=None):
     driver.get(MONITOR_PAGES[1]["url"])
     time.sleep(3)
     logger.info(f"标签页2: {MONITOR_PAGES[1]['label']} 已打开")
-
-    # 第三个标签页 - 搜索（使用动态URL）
-    driver.execute_script("window.open('');")
-    driver.switch_to.window(driver.window_handles[2])
-    driver.get(search_url)
-    time.sleep(3)
-    logger.info(f"标签页3: {MONITOR_PAGES[2]['label']} 已打开 (动态URL)")
 
     # 切回第一个标签页
     driver.switch_to.window(driver.window_handles[0])
@@ -345,19 +330,6 @@ def refresh_page(driver, page_config, tab_index, account_name=None):
                 driver.get(page_config["url"])
                 time.sleep(2)
                 return True
-
-        elif refresh_type == "search_refilter":
-            # 搜索页面 - 检查是否需要更新URL（日期变化）
-            key = account_name or "_default"
-            new_url = build_fb_today_url(SEARCH_KEYWORD)
-            old_url = _last_search_urls.get(key, "")
-            if new_url != old_url:
-                logger.info("搜索URL已变化（日期更新），重新加载...")
-                _last_search_urls[key] = new_url
-            driver.get(new_url)
-            logger.info("搜索页面已重新加载")
-            time.sleep(3)
-            return True
 
     except Exception as e:
         logger.error(f"刷新页面失败: {e}")
@@ -981,11 +953,30 @@ def process_single_post(post_element, driver, page_name, account_name=None):
     update_status(last_post_content=content[:200])
     logger.info(f"帖子内容: {clean_content[:100]}...")
 
-    # 7. 同步AI分析（使用清洗后的内容）
+    # 7. 同步AI分析（使用清洗后的内容）- 三选二投票逻辑
     update_status(last_action=f"AI分析帖子 {post_id}")
-    logger.info(f"开始AI分析帖子 {post_id}...")
-    is_target, ai_response = analyze_post(clean_content)
-    logger.info(f"AI分析结果: {'目标客户' if is_target else '非目标客户'}")
+    logger.info(f"开始AI分析帖子 {post_id} (三选二投票)...")
+
+    votes = []
+    ai_responses = []
+    for vote_round in range(3):
+        round_is_target, round_response = analyze_post(clean_content)
+        votes.append(round_is_target)
+        ai_responses.append(round_response)
+        vote_label = "是" if round_is_target else "否"
+        logger.info(f"[投票] 第{vote_round + 1}轮: {vote_label}")
+
+    # 三选二：至少2票"是"才判定为目标客户
+    yes_count = sum(1 for v in votes if v)
+    is_target = yes_count >= 2
+    vote_summary = ", ".join(["是" if v else "否" for v in votes])
+    final_label = "目标客户" if is_target else "非目标客户"
+    logger.info(f"[投票结果] {vote_summary} → 最终: {final_label} ({yes_count}/3)")
+
+    # 合并AI响应，记录投票详情
+    ai_response = f"=== 投票结果: {vote_summary} → {final_label} ({yes_count}/3) ===\n\n"
+    for i, resp in enumerate(ai_responses):
+        ai_response += f"--- 第{i+1}轮 ({('是' if votes[i] else '否')}) ---\n{resp}\n\n"
 
     # 8. 保存到数据库
     post_data = {
@@ -1198,8 +1189,8 @@ def start_monitor_for_account(account_name, cookie_url):
             update_account_status(account_name, running=False, error="Cookie加载失败")
             return
 
-        # 4. 打开三个标签页（使用动态搜索URL）
-        logger.info(f"[{account_name}] 步骤4: 打开三个监控标签页...")
+        # 4. 打开监控标签页（首页+小组）
+        logger.info(f"[{account_name}] 步骤4: 打开监控标签页...")
         open_all_tabs(driver, account_name=account_name)
 
         # 5. 开始循环监控
