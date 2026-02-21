@@ -6,7 +6,7 @@ import logging
 import threading
 from datetime import datetime, timezone, timedelta
 
-from config import SEND_COOLDOWN_SECONDS
+from config import SEND_COOLDOWN_SECONDS, DAILY_SEND_LIMIT
 from models import get_session, Account, SendTask, PostAction, WhatsAppAccount, Post
 from ai_analyzer import generate_comment, generate_dm_with_whatsapp, generate_dm_without_whatsapp
 from sender import SenderEngine
@@ -82,6 +82,17 @@ def get_next_task(account_id):
     try:
         account = session.query(Account).filter(Account.id == account_id).first()
         if not account:
+            return None
+
+        # 检查每日发送上限
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        daily_count = session.query(SendTask).filter(
+            SendTask.account_id == account_id,
+            SendTask.status == 'completed',
+            SendTask.completed_at >= today_start
+        ).count()
+        if daily_count >= DAILY_SEND_LIMIT:
+            logger.debug(f"[{account.name}] 今日已完成 {daily_count} 个任务，达到上限 {DAILY_SEND_LIMIT}，跳过")
             return None
 
         # 检查24小时消息限制

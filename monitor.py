@@ -14,17 +14,21 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver import ActionChains
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from config import (
     COOKIE_URL, COOKIES_DIR, USER_AGENTS, USER_DATA_DIR,
     MONITOR_PAGES, MAX_POSTS_PER_PAGE,
-    INTEREST_PROBABILITY, LIKE_PROBABILITY,
+    INTEREST_PROBABILITY, NOT_INTERESTED_PROBABILITY, LIKE_PROBABILITY,
+    NOT_INTERESTED_DELAY_MIN, NOT_INTERESTED_DELAY_MAX,
     SCROLL_WAIT_MIN, SCROLL_WAIT_MAX,
     ACTION_WAIT_MIN, ACTION_WAIT_MAX,
     POST_LOAD_TIMEOUT, INTEREST_CLICK_WAIT,
+    AI_BATCH_SIZE, ROUND_INTERVAL_MIN, ROUND_INTERVAL_MAX,
     random_delay,
 )
 from models import is_post_exists, save_post, update_post_action, MonitorLog, get_session, Account
-from ai_analyzer import analyze_post
+from ai_analyzer import analyze_post_concurrent
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +277,13 @@ def switch_to_tab(driver, tab_index):
     if tab_index < len(handles):
         driver.switch_to.window(handles[tab_index])
         time.sleep(1)
-        logger.info(f"已切换到标签页 {tab_index + 1}: {MONITOR_PAGES[tab_index]['label']}")
+        label = MONITOR_PAGES[tab_index]['label'] if tab_index < len(MONITOR_PAGES) else f"标签{tab_index}"
+        logger.info(f"已切换到标签页 {tab_index + 1}: {label}")
+        return True
+    # 只有一个标签页时，tab_index=0直接返回成功
+    if tab_index == 0 and len(handles) >= 1:
+        driver.switch_to.window(handles[0])
+        time.sleep(1)
         return True
     logger.error(f"标签页 {tab_index} 不存在")
     return False
@@ -898,8 +908,9 @@ def wait_for_posts_load(driver, timeout=None):
         return False
 
 
-def process_single_post(post_element, driver, page_name, account_name=None):
-    """处理单个帖子 - 同步流程"""
+def extract_post_data(post_element, driver, page_name, account_name=None):
+    """提取阶段：从帖子元素中提取数据，不做AI分析（需要浏览器，必须顺序执行）
+    返回 dict 或 None（如果帖子应被跳过）"""
     # 1. 提取帖子ID
     post_id = extract_post_id(post_element)
     if not post_id:
@@ -911,8 +922,7 @@ def process_single_post(post_element, driver, page_name, account_name=None):
         logger.info(f"帖子 {post_id} 已存在，跳过")
         return None
 
-    logger.info(f"处理新帖子: {post_id}")
-    update_status(last_action=f"处理帖子 {post_id}")
+    logger.info(f"提取新帖子数据: {post_id}")
 
     # 3. 滚动到帖子可见
     try:
@@ -924,7 +934,7 @@ def process_single_post(post_element, driver, page_name, account_name=None):
     # 4. 获取帖子完整内容
     content = get_full_post_content(post_element, driver)
 
-    # 5. 跳过无文本的帖子（纯图片/视频帖无法用文本AI分析）
+    # 5. 跳过无文本的帖子
     if not content or len(content.strip()) < 10:
         logger.info(f"帖子 {post_id} 无文本内容，跳过")
         return None
@@ -934,61 +944,98 @@ def process_single_post(post_element, driver, page_name, account_name=None):
     author_name, author_id, author_profile_url = extract_author_info(post_element)
     post_time = extract_post_time(post_element)
 
-    # 6.1 预过滤：纯标点/表情/链接等垃圾内容直接跳过
+    # 6.1 预过滤
     if _is_junk_content(content):
         logger.info(f"帖子 {post_id} 内容无实质文字，跳过")
         return None
-
-    # 6.2 预过滤：交友/征婚等明显非商业帖子直接跳过
     if _is_non_business_content(content):
         logger.info(f"帖子 {post_id} 为交友/社交帖，跳过")
         return None
 
-    # 6.3 清洗内容：移除小组名称、作者名等非正文信息
+    # 6.2 清洗内容
     clean_content = _clean_content_for_ai(content, author_name)
     if not clean_content or len(clean_content.strip()) < 10:
         logger.info(f"帖子 {post_id} 清洗后无实质内容，跳过")
         return None
 
-    update_status(last_post_content=content[:200])
     logger.info(f"帖子内容: {clean_content[:100]}...")
 
-    # 7. 同步AI分析（使用清洗后的内容）- 三选二投票逻辑
-    update_status(last_action=f"AI分析帖子 {post_id}")
-    logger.info(f"开始AI分析帖子 {post_id} (三选二投票)...")
-
-    votes = []
-    ai_responses = []
-    for vote_round in range(3):
-        round_is_target, round_response = analyze_post(clean_content)
-        votes.append(round_is_target)
-        ai_responses.append(round_response)
-        vote_label = "是" if round_is_target else "否"
-        logger.info(f"[投票] 第{vote_round + 1}轮: {vote_label}")
-
-    # 三选二：至少2票"是"才判定为目标客户
-    yes_count = sum(1 for v in votes if v)
-    is_target = yes_count >= 2
-    vote_summary = ", ".join(["是" if v else "否" for v in votes])
-    final_label = "目标客户" if is_target else "非目标客户"
-    logger.info(f"[投票结果] {vote_summary} → 最终: {final_label} ({yes_count}/3)")
-
-    # 合并AI响应，记录投票详情
-    ai_response = f"=== 投票结果: {vote_summary} → {final_label} ({yes_count}/3) ===\n\n"
-    for i, resp in enumerate(ai_responses):
-        ai_response += f"--- 第{i+1}轮 ({('是' if votes[i] else '否')}) ---\n{resp}\n\n"
-
-    # 8. 保存到数据库
-    post_data = {
+    return {
         "post_id": post_id,
         "post_url": post_url,
         "author_name": author_name,
         "author_id": author_id,
         "author_profile_url": author_profile_url,
         "content": content,
+        "clean_content": clean_content,
         "post_time": post_time,
         "source_page": page_name,
-        "ai_result": ai_response,
+        "discovered_by": account_name,
+        "post_element": post_element,  # 保留引用，用于后续交互
+    }
+
+
+def _analyze_single_post(extracted):
+    """对单个已提取的帖子进行并发AI三选二分析（纯计算，不需要浏览器）"""
+    post_id = extracted["post_id"]
+    clean_content = extracted["clean_content"]
+
+    logger.info(f"开始并发AI分析帖子 {post_id} (三选二投票)...")
+    is_target, ai_response, votes = analyze_post_concurrent(clean_content)
+
+    vote_summary = ", ".join(["是" if v else "否" for v in votes])
+    final_label = "目标客户" if is_target else "非目标客户"
+    logger.info(f"[投票结果] {post_id}: {vote_summary} → {final_label}")
+
+    extracted["is_target"] = is_target
+    extracted["ai_result"] = ai_response
+    return extracted
+
+
+def batch_analyze_posts(extracted_list):
+    """批量并发分析多个帖子（最多AI_BATCH_SIZE个同时分析）"""
+    if not extracted_list:
+        return []
+
+    logger.info(f"开始批量并发分析 {len(extracted_list)} 个帖子...")
+    results = []
+
+    with ThreadPoolExecutor(max_workers=min(len(extracted_list), AI_BATCH_SIZE)) as executor:
+        future_to_post = {
+            executor.submit(_analyze_single_post, ex): ex
+            for ex in extracted_list
+        }
+        for future in as_completed(future_to_post):
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                ex = future_to_post[future]
+                logger.error(f"分析帖子 {ex['post_id']} 异常: {e}")
+                ex["is_target"] = False
+                ex["ai_result"] = f"分析异常: {e}"
+                results.append(ex)
+
+    logger.info(f"批量分析完成，共 {len(results)} 个帖子")
+    return results
+
+
+def interact_and_save_post(analyzed_data, driver, account_name=None):
+    """交互并保存阶段：对已分析的帖子执行交互操作并保存到数据库（需要浏览器，必须顺序执行）"""
+    post_id = analyzed_data["post_id"]
+    is_target = analyzed_data["is_target"]
+    post_element = analyzed_data.get("post_element")
+
+    post_data = {
+        "post_id": post_id,
+        "post_url": analyzed_data.get("post_url"),
+        "author_name": analyzed_data.get("author_name"),
+        "author_id": analyzed_data.get("author_id"),
+        "author_profile_url": analyzed_data.get("author_profile_url"),
+        "content": analyzed_data.get("content"),
+        "post_time": analyzed_data.get("post_time"),
+        "source_page": analyzed_data.get("source_page"),
+        "ai_result": analyzed_data.get("ai_result"),
         "is_target": is_target,
         "action_interested": False,
         "action_not_interested": False,
@@ -996,36 +1043,49 @@ def process_single_post(post_element, driver, page_name, account_name=None):
         "discovered_by": account_name,
     }
 
-    # 9. 交互操作 - 80%概率点击有兴趣/没兴趣
-    if random.random() < INTEREST_PROBABILITY:
-        update_status(last_action=f"点击{'有兴趣' if is_target else '没兴趣'} - {post_id}")
-        if click_three_dots_menu(post_element, driver):
+    # 交互操作 - 目标帖子必须点击有兴趣，非目标帖子低概率点击没兴趣
+    if post_element:
+        try:
             if is_target:
-                if click_interested(driver):
-                    post_data["action_interested"] = True
+                # 目标帖子：必须点击有兴趣
+                update_status(last_action=f"点击有兴趣 - {post_id}")
+                if click_three_dots_menu(post_element, driver):
+                    if click_interested(driver):
+                        post_data["action_interested"] = True
+                random_delay()
             else:
-                if click_not_interested(driver):
-                    post_data["action_not_interested"] = True
-        random_delay()
+                # 非目标帖子：低概率点击没兴趣，且延迟更长避免风控
+                if random.random() < NOT_INTERESTED_PROBABILITY:
+                    update_status(last_action=f"点击没兴趣 - {post_id}")
+                    # 点击没兴趣前增加较长延迟
+                    random_delay(NOT_INTERESTED_DELAY_MIN, NOT_INTERESTED_DELAY_MAX)
+                    if click_three_dots_menu(post_element, driver):
+                        if click_not_interested(driver):
+                            post_data["action_not_interested"] = True
+                    random_delay()
+        except Exception as e:
+            logger.warning(f"帖子 {post_id} 交互操作异常: {e}")
 
-    # 10. 0.5%概率点赞（被风控的账号跳过）
-    if account_name and account_name in _like_disabled_accounts:
-        logger.info(f"[{account_name}] 该账号已被风控，跳过点赞")
-    elif random.random() < LIKE_PROBABILITY:
-        update_status(last_action=f"点赞 - {post_id}")
-        liked, restricted = click_like(post_element, driver)
-        if liked:
-            post_data["action_liked"] = True
-        if restricted and account_name:
-            _like_disabled_accounts.add(account_name)
-            logger.warning(f"[{account_name}] 点赞遇到风控，已停止该账号的点赞功能")
-        random_delay()
+        # 点赞：极低概率（被风控的账号跳过）
+        try:
+            if account_name and account_name in _like_disabled_accounts:
+                pass  # 已被风控，跳过
+            elif is_target and random.random() < LIKE_PROBABILITY:
+                update_status(last_action=f"点赞 - {post_id}")
+                liked, restricted = click_like(post_element, driver)
+                if liked:
+                    post_data["action_liked"] = True
+                if restricted and account_name:
+                    _like_disabled_accounts.add(account_name)
+                    logger.warning(f"[{account_name}] 点赞遇到风控，已停止该账号的点赞功能")
+                random_delay()
+        except Exception as e:
+            logger.warning(f"帖子 {post_id} 点赞操作异常: {e}")
 
-    # 11. 保存到数据库
+    # 保存到数据库
     saved = save_post(post_data)
     if saved:
         logger.info(f"帖子 {post_id} 已保存到数据库")
-        # 如果是目标客户，自动生成发送任务
         if is_target:
             try:
                 from task_queue import generate_tasks_for_post
@@ -1040,7 +1100,7 @@ def process_single_post(post_element, driver, page_name, account_name=None):
 
 
 def monitor_single_page(driver, page_config, tab_index, account_name=None):
-    """监控单个页面 - 最多处理MAX_POSTS_PER_PAGE个帖子"""
+    """监控单个页面 - 批量提取+并发AI分析+顺序交互"""
     page_name = page_config["name"]
     page_label = page_config["label"]
 
@@ -1097,44 +1157,65 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
                     break
                 continue
 
-            found_new = False
+            # === 阶段1: 批量提取帖子数据（顺序，需要浏览器） ===
+            batch_extracted = []
             for post in post_elements:
-                if posts_processed >= MAX_POSTS_PER_PAGE:
+                if posts_processed + len(batch_extracted) >= MAX_POSTS_PER_PAGE:
                     break
 
                 try:
-                    # 快速提取ID检查去重
                     post_id = extract_post_id(post)
                     if post_id and post_id in processed_ids_this_round:
                         continue
-
                     if post_id:
                         processed_ids_this_round.add(post_id)
 
                     posts_scanned += 1
                     update_status(posts_processed=posts_processed, posts_total=posts_scanned)
 
-                    result = process_single_post(post, driver, page_name, account_name=account_name)
-                    if result:
-                        posts_processed += 1
-                        found_new = True
-                        update_status(posts_processed=posts_processed)
+                    extracted = extract_post_data(post, driver, page_name, account_name=account_name)
+                    if extracted:
+                        batch_extracted.append(extracted)
 
-                    # 随机延迟
-                    random_delay(ACTION_WAIT_MIN, ACTION_WAIT_MAX)
+                    # 提取间的短暂延迟
+                    random_delay(0.3, 0.8)
+
+                    # 收集够一批就先处理
+                    if len(batch_extracted) >= AI_BATCH_SIZE:
+                        break
 
                 except Exception as e:
-                    logger.error(f"处理帖子出错: {e}")
+                    logger.error(f"提取帖子数据出错: {e}")
                     continue
 
-            if not found_new:
+            if not batch_extracted:
                 no_new_posts_count += 1
-            else:
-                no_new_posts_count = 0
+                if no_new_posts_count > 3:
+                    logger.info("连续多次无新帖子，结束当前页面")
+                    break
+                # 滚动前检查并关闭遮罩层
+                dismiss_overlay(driver)
+                human_scroll(driver, random.randint(600, 1200))
+                random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
+                continue
 
-            if no_new_posts_count > 3:
-                logger.info("连续多次无新帖子，结束当前页面")
-                break
+            no_new_posts_count = 0
+
+            # === 阶段2: 批量并发AI分析（不需要浏览器） ===
+            logger.info(f"开始批量分析 {len(batch_extracted)} 个帖子...")
+            update_status(last_action=f"批量AI分析 {len(batch_extracted)} 个帖子")
+            analyzed_list = batch_analyze_posts(batch_extracted)
+
+            # === 阶段3: 顺序执行交互操作并保存（需要浏览器） ===
+            for analyzed in analyzed_list:
+                try:
+                    result = interact_and_save_post(analyzed, driver, account_name=account_name)
+                    if result:
+                        posts_processed += 1
+                        update_status(posts_processed=posts_processed)
+                    random_delay(ACTION_WAIT_MIN, ACTION_WAIT_MAX)
+                except Exception as e:
+                    logger.error(f"交互保存帖子 {analyzed.get('post_id')} 出错: {e}")
 
             # 滚动前检查并关闭遮罩层
             dismiss_overlay(driver)
@@ -1164,8 +1245,38 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
     return posts_processed
 
 
+def _monitor_page_loop(driver, page_config, tab_index, account_name, page_label_suffix=""):
+    """单个页面的持续监控循环（独立浏览器实例，独立线程运行）"""
+    page_name = page_config["name"]
+    page_label = page_config["label"]
+    thread_label = f"[{account_name}-{page_name}]"
+
+    round_count = 0
+    while monitor_status["running"]:
+        round_count += 1
+        logger.info(f"\n{thread_label} ===== 监控第 {round_count} 轮 =====")
+
+        try:
+            # 检查并关闭遮罩层
+            dismiss_overlay(driver)
+
+            logger.info(f"{thread_label} 开始监控: {page_label}")
+            new_posts = monitor_single_page(driver, page_config, tab_index, account_name=account_name)
+            logger.info(f"{thread_label} 第 {round_count} 轮完成，处理 {new_posts} 个新帖子")
+
+        except Exception as e:
+            logger.error(f"{thread_label} 监控轮次出错: {e}")
+
+        # 每轮之后等待几秒再继续
+        wait_time = random.uniform(ROUND_INTERVAL_MIN, ROUND_INTERVAL_MAX)
+        logger.info(f"{thread_label} 等待 {wait_time:.1f}s 后开始下一轮...")
+        time.sleep(wait_time)
+
+    logger.info(f"{thread_label} 监控循环已停止")
+
+
 def start_monitor_for_account(account_name, cookie_url):
-    """为指定账号启动监控循环"""
+    """为指定账号启动监控循环 - 首页和小组并行监控（各自独立浏览器）"""
     update_account_status(account_name, running=True, error="")
 
     # 1. 下载cookies
@@ -1175,52 +1286,74 @@ def start_monitor_for_account(account_name, cookie_url):
         update_account_status(account_name, running=False, error="Cookie下载失败")
         return
 
-    # 2. 创建浏览器
-    logger.info(f"[{account_name}] 步骤2: 创建浏览器实例...")
-    driver = create_driver()
-    if not driver:
-        update_account_status(account_name, running=False, error="浏览器创建失败")
-        return
+    # 2. 为每个监控页面创建独立浏览器实例
+    drivers = []
+    page_threads = []
 
     try:
-        # 3. 加载cookies
-        logger.info(f"[{account_name}] 步骤3: 加载Cookie...")
-        if not load_cookies(driver, cookies_file):
-            update_account_status(account_name, running=False, error="Cookie加载失败")
-            return
+        for i, page_config in enumerate(MONITOR_PAGES):
+            page_name = page_config["name"]
+            logger.info(f"[{account_name}] 创建 {page_config['label']} 专用浏览器...")
 
-        # 4. 打开监控标签页（首页+小组）
-        logger.info(f"[{account_name}] 步骤4: 打开监控标签页...")
-        open_all_tabs(driver, account_name=account_name)
+            driver = create_driver()
+            if not driver:
+                logger.error(f"[{account_name}] {page_config['label']} 浏览器创建失败")
+                update_account_status(account_name, running=False, error=f"{page_config['label']}浏览器创建失败")
+                # 清理已创建的浏览器
+                for d in drivers:
+                    try:
+                        d.quit()
+                    except Exception:
+                        pass
+                return
 
-        # 5. 开始循环监控
-        round_count = 0
+            # 加载cookies
+            logger.info(f"[{account_name}] 加载 {page_config['label']} Cookie...")
+            if not load_cookies(driver, cookies_file):
+                logger.error(f"[{account_name}] {page_config['label']} Cookie加载失败")
+                update_account_status(account_name, running=False, error=f"{page_config['label']} Cookie加载失败")
+                driver.quit()
+                for d in drivers:
+                    try:
+                        d.quit()
+                    except Exception:
+                        pass
+                return
+
+            # 导航到对应页面
+            logger.info(f"[{account_name}] 打开 {page_config['label']} 页面...")
+            driver.get(page_config["url"])
+            time.sleep(3)
+
+            drivers.append(driver)
+
+            # 错开浏览器启动
+            if i < len(MONITOR_PAGES) - 1:
+                time.sleep(3)
+
+        # 3. 为每个页面启动独立监控线程
+        logger.info(f"[{account_name}] 所有浏览器就绪，启动并行监控线程...")
+
+        for i, page_config in enumerate(MONITOR_PAGES):
+            t = threading.Thread(
+                target=_monitor_page_loop,
+                args=(drivers[i], page_config, 0, account_name),
+                daemon=True,
+            )
+            page_threads.append(t)
+            t.start()
+            logger.info(f"[{account_name}] {page_config['label']} 监控线程已启动")
+
+        update_account_status(account_name, round_count=0)
+
+        # 4. 主线程等待所有页面监控线程
         while monitor_status["running"]:
-            round_count += 1
-            update_account_status(account_name, round_count=round_count)
-            logger.info(f"\n[{account_name}] ===== 监控第 {round_count} 轮 =====")
-
-            total_new = 0
-            for i, page_config in enumerate(MONITOR_PAGES):
-                if not monitor_status["running"]:
-                    break
-
-                # 检查并关闭遮罩层
-                dismiss_overlay(driver)
-
-                logger.info(f"[{account_name}] --- 开始监控: {page_config['label']} ---")
-                new_posts = monitor_single_page(driver, page_config, i, account_name=account_name)
-                total_new += new_posts
-
-                if i < len(MONITOR_PAGES) - 1:
-                    delay = random.uniform(2, 4)
-                    time.sleep(delay)
-
-            update_account_status(account_name, posts_processed=total_new)
-            logger.info(f"[{account_name}] 第 {round_count} 轮完成，共处理 {total_new} 个新帖子")
-
-            wait_time = random.uniform(5, 10)
-            time.sleep(wait_time)
+            # 检查线程存活状态
+            alive = [t.is_alive() for t in page_threads]
+            if not any(alive):
+                logger.warning(f"[{account_name}] 所有监控线程已停止")
+                break
+            time.sleep(5)
 
     except KeyboardInterrupt:
         logger.info(f"[{account_name}] 监控被用户中断")
@@ -1229,11 +1362,12 @@ def start_monitor_for_account(account_name, cookie_url):
         update_account_status(account_name, error=str(e))
     finally:
         update_account_status(account_name, running=False)
-        logger.info(f"[{account_name}] 关闭浏览器...")
-        try:
-            driver.quit()
-        except Exception:
-            pass
+        logger.info(f"[{account_name}] 关闭所有浏览器...")
+        for d in drivers:
+            try:
+                d.quit()
+            except Exception:
+                pass
 
 
 def start_monitor():

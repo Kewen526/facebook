@@ -360,6 +360,44 @@ def analyze_post(post_content: str) -> tuple:
     return is_target, response
 
 
+def analyze_post_concurrent(post_content: str, num_votes: int = 3) -> tuple:
+    """并发三选二投票分析帖子，返回 (is_target, ai_response_combined, votes)"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    prompt = PROMPT_TEMPLATE.replace("{用户原文}", post_content)
+
+    def single_vote():
+        response = analyze_with_ai(prompt)
+        is_target = parse_analysis_result(response)
+        return is_target, response
+
+    votes = []
+    ai_responses = []
+
+    with ThreadPoolExecutor(max_workers=num_votes) as executor:
+        futures = [executor.submit(single_vote) for _ in range(num_votes)]
+        for future in as_completed(futures):
+            try:
+                is_target, response = future.result()
+                votes.append(is_target)
+                ai_responses.append(response)
+            except Exception as e:
+                logger.error(f"并发投票异常: {e}")
+                votes.append(False)
+                ai_responses.append(f"投票异常: {e}")
+
+    yes_count = sum(1 for v in votes if v)
+    is_target = yes_count >= 2
+    vote_summary = ", ".join(["是" if v else "否" for v in votes])
+    final_label = "目标客户" if is_target else "非目标客户"
+
+    ai_response = f"=== 投票结果: {vote_summary} → {final_label} ({yes_count}/{num_votes}) ===\n\n"
+    for i, resp in enumerate(ai_responses):
+        ai_response += f"--- 第{i+1}轮 ({('是' if votes[i] else '否')}) ---\n{resp}\n\n"
+
+    return is_target, ai_response, votes
+
+
 # ============ 内容生成提示词 ============
 
 COMMENT_PROMPT = """You are a professional sourcing agent from China writing a Facebook comment. Be creative and vary your wording every time.
