@@ -893,6 +893,8 @@ createApp({
                 loadStatus(); loadStats();
                 if (activeTab.value === 'posts') loadPosts(currentPage.value);
                 if (activeTab.value === 'sending') loadSendingStatus();
+                if (activeTab.value === 'logs') loadLogs();
+                if (activeTab.value === 'dashboard') loadDashboard();
             }, 10000);
         });
 
