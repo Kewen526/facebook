@@ -1119,12 +1119,7 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
     # 刷新页面
     refresh_page(driver, page_config, tab_index, account_name=account_name)
 
-    # 等待帖子加载
-    if not wait_for_posts_load(driver):
-        logger.warning(f"{page_label}: 未检测到帖子")
-        return 0
-
-    # 记录日志
+    # 记录日志（提前创建，确保任何退出路径都能更新）
     session = get_session()
     log = MonitorLog(
         page_type=page_name,
@@ -1138,108 +1133,119 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
 
     posts_processed = 0
     posts_scanned = 0
-    processed_ids_this_round = set()
-    no_new_posts_count = 0
 
-    while posts_processed < MAX_POSTS_PER_PAGE:
-        try:
-            post_elements = driver.find_elements(By.XPATH, "//div[@role='article']")
-            current_count = len(post_elements)
-            logger.info(f"{page_label}: 找到 {current_count} 个帖子元素")
+    try:
+        # 等待帖子加载
+        if not wait_for_posts_load(driver):
+            logger.warning(f"{page_label}: 未检测到帖子")
+            return 0
 
-            if current_count == 0:
-                logger.info("未找到帖子，尝试滚动...")
-                human_scroll(driver)
-                random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
-                no_new_posts_count += 1
-                if no_new_posts_count > 5:
-                    logger.info("连续5次未找到新帖子，结束当前页面")
-                    break
-                continue
+        processed_ids_this_round = set()
+        no_new_posts_count = 0
 
-            # === 阶段1: 批量提取帖子数据（顺序，需要浏览器） ===
-            batch_extracted = []
-            for post in post_elements:
-                if posts_processed + len(batch_extracted) >= MAX_POSTS_PER_PAGE:
-                    break
+        while posts_processed < MAX_POSTS_PER_PAGE:
+            try:
+                post_elements = driver.find_elements(By.XPATH, "//div[@role='article']")
+                current_count = len(post_elements)
+                logger.info(f"{page_label}: 找到 {current_count} 个帖子元素")
 
-                try:
-                    post_id = extract_post_id(post)
-                    if post_id and post_id in processed_ids_this_round:
-                        continue
-                    if post_id:
-                        processed_ids_this_round.add(post_id)
-
-                    posts_scanned += 1
-                    update_status(posts_processed=posts_processed, posts_total=posts_scanned)
-
-                    extracted = extract_post_data(post, driver, page_name, account_name=account_name)
-                    if extracted:
-                        batch_extracted.append(extracted)
-
-                    # 提取间的短暂延迟
-                    random_delay(0.3, 0.8)
-
-                    # 收集够一批就先处理
-                    if len(batch_extracted) >= AI_BATCH_SIZE:
+                if current_count == 0:
+                    logger.info("未找到帖子，尝试滚动...")
+                    human_scroll(driver)
+                    random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
+                    no_new_posts_count += 1
+                    if no_new_posts_count > 5:
+                        logger.info("连续5次未找到新帖子，结束当前页面")
                         break
-
-                except Exception as e:
-                    logger.error(f"提取帖子数据出错: {e}")
                     continue
 
-            if not batch_extracted:
-                no_new_posts_count += 1
-                if no_new_posts_count > 3:
-                    logger.info("连续多次无新帖子，结束当前页面")
-                    break
+                # === 阶段1: 批量提取帖子数据（顺序，需要浏览器） ===
+                batch_extracted = []
+                for post in post_elements:
+                    if posts_processed + len(batch_extracted) >= MAX_POSTS_PER_PAGE:
+                        break
+
+                    try:
+                        post_id = extract_post_id(post)
+                        if post_id and post_id in processed_ids_this_round:
+                            continue
+                        if post_id:
+                            processed_ids_this_round.add(post_id)
+
+                        posts_scanned += 1
+                        update_status(posts_processed=posts_processed, posts_total=posts_scanned)
+
+                        extracted = extract_post_data(post, driver, page_name, account_name=account_name)
+                        if extracted:
+                            batch_extracted.append(extracted)
+
+                        # 提取间的短暂延迟
+                        random_delay(0.3, 0.8)
+
+                        # 收集够一批就先处理
+                        if len(batch_extracted) >= AI_BATCH_SIZE:
+                            break
+
+                    except Exception as e:
+                        logger.error(f"提取帖子数据出错: {e}")
+                        continue
+
+                if not batch_extracted:
+                    no_new_posts_count += 1
+                    if no_new_posts_count > 3:
+                        logger.info("连续多次无新帖子，结束当前页面")
+                        break
+                    # 滚动前检查并关闭遮罩层
+                    dismiss_overlay(driver)
+                    human_scroll(driver, random.randint(600, 1200))
+                    random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
+                    continue
+
+                no_new_posts_count = 0
+
+                # === 阶段2: 批量并发AI分析（不需要浏览器） ===
+                logger.info(f"开始批量分析 {len(batch_extracted)} 个帖子...")
+                update_status(last_action=f"批量AI分析 {len(batch_extracted)} 个帖子")
+                analyzed_list = batch_analyze_posts(batch_extracted)
+
+                # === 阶段3: 顺序执行交互操作并保存（需要浏览器） ===
+                for analyzed in analyzed_list:
+                    try:
+                        result = interact_and_save_post(analyzed, driver, account_name=account_name)
+                        if result:
+                            posts_processed += 1
+                            update_status(posts_processed=posts_processed)
+                        random_delay(ACTION_WAIT_MIN, ACTION_WAIT_MAX)
+                    except Exception as e:
+                        logger.error(f"交互保存帖子 {analyzed.get('post_id')} 出错: {e}")
+
                 # 滚动前检查并关闭遮罩层
                 dismiss_overlay(driver)
+
+                # 滚动加载更多
+                logger.info("向下滚动加载更多帖子...")
                 human_scroll(driver, random.randint(600, 1200))
                 random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
-                continue
 
-            no_new_posts_count = 0
+            except Exception as e:
+                logger.error(f"监控页面循环出错: {e}")
+                break
 
-            # === 阶段2: 批量并发AI分析（不需要浏览器） ===
-            logger.info(f"开始批量分析 {len(batch_extracted)} 个帖子...")
-            update_status(last_action=f"批量AI分析 {len(batch_extracted)} 个帖子")
-            analyzed_list = batch_analyze_posts(batch_extracted)
-
-            # === 阶段3: 顺序执行交互操作并保存（需要浏览器） ===
-            for analyzed in analyzed_list:
-                try:
-                    result = interact_and_save_post(analyzed, driver, account_name=account_name)
-                    if result:
-                        posts_processed += 1
-                        update_status(posts_processed=posts_processed)
-                    random_delay(ACTION_WAIT_MIN, ACTION_WAIT_MAX)
-                except Exception as e:
-                    logger.error(f"交互保存帖子 {analyzed.get('post_id')} 出错: {e}")
-
-            # 滚动前检查并关闭遮罩层
-            dismiss_overlay(driver)
-
-            # 滚动加载更多
-            logger.info("向下滚动加载更多帖子...")
-            human_scroll(driver, random.randint(600, 1200))
-            random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
-
-        except Exception as e:
-            logger.error(f"监控页面循环出错: {e}")
-            break
-
-    # 更新日志
-    session = get_session()
-    try:
-        log = session.query(MonitorLog).filter(MonitorLog.id == log_id).first()
-        if log:
-            log.posts_scanned = posts_scanned
-            log.posts_new = posts_processed
-            log.finished_at = datetime.now(timezone.utc)
-            session.commit()
     finally:
-        session.close()
+        # 无论正常退出还是异常退出，都更新日志记录
+        session = get_session()
+        try:
+            log = session.query(MonitorLog).filter(MonitorLog.id == log_id).first()
+            if log:
+                log.posts_scanned = posts_scanned
+                log.posts_new = posts_processed
+                log.finished_at = datetime.now(timezone.utc)
+                session.commit()
+        except Exception as e:
+            logger.error(f"更新监控日志失败: {e}")
+            session.rollback()
+        finally:
+            session.close()
 
     logger.info(f"{page_label}: 扫描 {posts_scanned} 个帖子，处理 {posts_processed} 个新帖子")
     return posts_processed
