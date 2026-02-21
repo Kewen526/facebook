@@ -1140,6 +1140,14 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
             logger.warning(f"{page_label}: 未检测到帖子")
             return 0
 
+        # 预滚动：先滚动几次让页面加载更多帖子
+        for i in range(3):
+            human_scroll(driver, random.randint(800, 1500))
+            random_delay(1.5, 3)
+        # 滚回顶部，从头开始扫描
+        driver.execute_script("window.scrollTo(0, 0);")
+        random_delay(1, 2)
+
         processed_ids_this_round = set()
         no_new_posts_count = 0
 
@@ -1151,11 +1159,11 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
 
                 if current_count == 0:
                     logger.info("未找到帖子，尝试滚动...")
-                    human_scroll(driver)
+                    human_scroll(driver, random.randint(800, 1500))
                     random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
                     no_new_posts_count += 1
-                    if no_new_posts_count > 5:
-                        logger.info("连续5次未找到新帖子，结束当前页面")
+                    if no_new_posts_count > 8:
+                        logger.info("连续8次未找到新帖子，结束当前页面")
                         break
                     continue
 
@@ -1192,12 +1200,12 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
 
                 if not batch_extracted:
                     no_new_posts_count += 1
-                    if no_new_posts_count > 3:
+                    if no_new_posts_count > 5:
                         logger.info("连续多次无新帖子，结束当前页面")
                         break
                     # 滚动前检查并关闭遮罩层
                     dismiss_overlay(driver)
-                    human_scroll(driver, random.randint(600, 1200))
+                    human_scroll(driver, random.randint(1000, 2000))
                     random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
                     continue
 
@@ -1224,7 +1232,7 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
 
                 # 滚动加载更多
                 logger.info("向下滚动加载更多帖子...")
-                human_scroll(driver, random.randint(600, 1200))
+                human_scroll(driver, random.randint(1000, 2000))
                 random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
 
             except Exception as e:
