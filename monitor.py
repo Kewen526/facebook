@@ -320,26 +320,15 @@ def refresh_page(driver, page_config, tab_index, account_name=None):
                 # 备用方案: 直接导航
                 logger.warning("未找到首页按钮，使用导航刷新")
                 driver.get(page_config["url"])
-                time.sleep(2)
+                time.sleep(5)
                 return True
 
         elif refresh_type == "groups_link":
-            # 小组页面 - 点击小组链接
-            try:
-                groups_link = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH,
-                        "//a[contains(@href,'filter=groups') and contains(@href,'sk=h_chr')]"
-                    ))
-                )
-                groups_link.click()
-                logger.info("已点击小组链接")
-                time.sleep(2)
-                return True
-            except Exception:
-                logger.warning("未找到小组链接，使用导航刷新")
-                driver.get(page_config["url"])
-                time.sleep(2)
-                return True
+            # 小组页面 - 直接导航刷新，确保页面完全重新加载
+            logger.info("小组页面: 直接导航刷新")
+            driver.get(page_config["url"])
+            time.sleep(5)  # 充分等待页面渲染
+            return True
 
     except Exception as e:
         logger.error(f"刷新页面失败: {e}")
@@ -894,17 +883,28 @@ def human_scroll(driver, pixels=None):
         time.sleep(random.uniform(0.3, 0.6))
 
 
-def wait_for_posts_load(driver, timeout=None):
-    """等待帖子加载"""
+def wait_for_posts_load(driver, timeout=None, min_posts=3):
+    """等待帖子加载，直到至少出现 min_posts 个帖子"""
     timeout = timeout or POST_LOAD_TIMEOUT
     try:
+        # 先等待至少1个帖子出现
         WebDriverWait(driver, timeout).until(
             EC.presence_of_element_located((By.XPATH, "//div[@role='article']"))
         )
-        time.sleep(2)
-        return True
+        # 继续等待直到帖子数达到 min_posts 或超时
+        end_time = time.time() + timeout
+        while time.time() < end_time:
+            count = len(driver.find_elements(By.XPATH, "//div[@role='article']"))
+            if count >= min_posts:
+                logger.info(f"帖子加载完成，已检测到 {count} 个帖子")
+                return True
+            time.sleep(1)
+        # 超时但至少有1个帖子
+        count = len(driver.find_elements(By.XPATH, "//div[@role='article']"))
+        logger.info(f"等待更多帖子超时，当前 {count} 个")
+        return count > 0
     except Exception:
-        logger.warning("等待帖子加载超时")
+        logger.warning("等待帖子加载超时，未检测到任何帖子")
         return False
 
 
@@ -1140,14 +1140,35 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
             logger.warning(f"{page_label}: 未检测到帖子")
             return 0
 
-        # 预滚动：先滚动几次让页面加载更多帖子
-        for i in range(3):
-            human_scroll(driver, random.randint(800, 1500))
-            random_delay(1.5, 3)
-        # 滚回顶部，从头开始扫描
-        driver.execute_script("window.scrollTo(0, 0);")
-        random_delay(1, 2)
+        # === 预加载阶段：慢速滚动让页面加载更多帖子 ===
+        logger.info(f"{page_label}: 开始预加载滚动...")
+        prev_count = 0
+        no_growth_count = 0
+        for i in range(8):
+            # 慢速滚动到当前页面底部附近
+            driver.execute_script(
+                "window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});"
+            )
+            # 每次滚动后等待2-4秒，模拟人类阅读节奏，避免风控
+            random_delay(2, 4)
 
+            # 检查帖子数量是否增长
+            cur_count = len(driver.find_elements(By.XPATH, "//div[@role='article']"))
+            logger.info(f"{page_label}: 预加载第{i+1}轮, 帖子数: {cur_count}")
+            if cur_count == prev_count:
+                no_growth_count += 1
+                if no_growth_count >= 3:
+                    logger.info(f"{page_label}: 帖子数不再增长，停止预加载")
+                    break
+            else:
+                no_growth_count = 0
+            prev_count = cur_count
+
+        # 滚回顶部，从头开始扫描
+        driver.execute_script("window.scrollTo({top: 0, behavior: 'smooth'});")
+        random_delay(1.5, 2.5)
+
+        # === 扫描阶段：一次性提取所有帖子 ===
         processed_ids_this_round = set()
         no_new_posts_count = 0
 
@@ -1163,11 +1184,11 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
                     random_delay(SCROLL_WAIT_MIN, SCROLL_WAIT_MAX)
                     no_new_posts_count += 1
                     if no_new_posts_count > 8:
-                        logger.info("连续8次未找到新帖子，结束当前页面")
+                        logger.info("连续8次未找到帖子，结束当前页面")
                         break
                     continue
 
-                # === 阶段1: 批量提取帖子数据（顺序，需要浏览器） ===
+                # === 阶段1: 提取当前可见的所有帖子（不再受 AI_BATCH_SIZE 限制） ===
                 batch_extracted = []
                 for post in post_elements:
                     if posts_processed + len(batch_extracted) >= MAX_POSTS_PER_PAGE:
@@ -1190,10 +1211,6 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
                         # 提取间的短暂延迟
                         random_delay(0.3, 0.8)
 
-                        # 收集够一批就先处理
-                        if len(batch_extracted) >= AI_BATCH_SIZE:
-                            break
-
                     except Exception as e:
                         logger.error(f"提取帖子数据出错: {e}")
                         continue
@@ -1211,21 +1228,24 @@ def monitor_single_page(driver, page_config, tab_index, account_name=None):
 
                 no_new_posts_count = 0
 
-                # === 阶段2: 批量并发AI分析（不需要浏览器） ===
-                logger.info(f"开始批量分析 {len(batch_extracted)} 个帖子...")
-                update_status(last_action=f"批量AI分析 {len(batch_extracted)} 个帖子")
-                analyzed_list = batch_analyze_posts(batch_extracted)
+                # === 阶段2: 分批并发AI分析（不需要浏览器） ===
+                # 将提取的帖子按 AI_BATCH_SIZE 分批处理
+                for batch_start in range(0, len(batch_extracted), AI_BATCH_SIZE):
+                    batch = batch_extracted[batch_start:batch_start + AI_BATCH_SIZE]
+                    logger.info(f"开始批量分析 {len(batch)} 个帖子 (第{batch_start//AI_BATCH_SIZE + 1}批)...")
+                    update_status(last_action=f"批量AI分析 {len(batch)} 个帖子")
+                    analyzed_list = batch_analyze_posts(batch)
 
-                # === 阶段3: 顺序执行交互操作并保存（需要浏览器） ===
-                for analyzed in analyzed_list:
-                    try:
-                        result = interact_and_save_post(analyzed, driver, account_name=account_name)
-                        if result:
-                            posts_processed += 1
-                            update_status(posts_processed=posts_processed)
-                        random_delay(ACTION_WAIT_MIN, ACTION_WAIT_MAX)
-                    except Exception as e:
-                        logger.error(f"交互保存帖子 {analyzed.get('post_id')} 出错: {e}")
+                    # === 阶段3: 顺序执行交互操作并保存（需要浏览器） ===
+                    for analyzed in analyzed_list:
+                        try:
+                            result = interact_and_save_post(analyzed, driver, account_name=account_name)
+                            if result:
+                                posts_processed += 1
+                                update_status(posts_processed=posts_processed)
+                            random_delay(ACTION_WAIT_MIN, ACTION_WAIT_MAX)
+                        except Exception as e:
+                            logger.error(f"交互保存帖子 {analyzed.get('post_id')} 出错: {e}")
 
                 # 滚动前检查并关闭遮罩层
                 dismiss_overlay(driver)
