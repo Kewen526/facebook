@@ -745,7 +745,7 @@ createApp({
             const d = await fetchAPI('/api/sending/status');
             if (d && d.success) sendingStatus.value = d.data;
             await loadDashboard();
-            await loadSendingTasks();
+            await loadSendingTasks(sendingTasksPage.value);
         }
 
         async function loadSendingTasks(page = 1) {

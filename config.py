@@ -27,6 +27,7 @@ ZHIPU_MODEL = "glm-z1-flash"
 
 # ============ 发送配置 ============
 SEND_COOLDOWN_SECONDS = 600  # 每个发送账号任务间隔10分钟
+DAILY_SEND_LIMIT = 4  # 每个发送账号每天最多执行的发送任务数
 SEARCH_KEYWORD = "dropshipping"  # 搜索关键词
 
 
@@ -68,14 +69,21 @@ MONITOR_PAGES = [
 
 # ============ 监控参数 ============
 MAX_POSTS_PER_PAGE = 100  # 每个页面最多刷100个帖子
-INTEREST_PROBABILITY = 0.8  # 80%概率点击有兴趣/没兴趣
-LIKE_PROBABILITY = 0.005  # 0.5%概率点赞
+INTEREST_PROBABILITY = 1.0  # 目标帖子100%点击有兴趣（必须执行）
+NOT_INTERESTED_PROBABILITY = 0.15  # 非目标帖子15%概率点击没兴趣（降低避免风控）
+LIKE_PROBABILITY = 0.002  # 0.2%概率点赞（进一步降低）
+NOT_INTERESTED_DELAY_MIN = 3  # 点击没兴趣前最小延迟(秒)，降低速度避免风控
+NOT_INTERESTED_DELAY_MAX = 6  # 点击没兴趣前最大延迟(秒)
 SCROLL_WAIT_MIN = 1  # 滚动后最小等待时间(秒)
 SCROLL_WAIT_MAX = 3  # 滚动后最大等待时间(秒)
 ACTION_WAIT_MIN = 0.5  # 操作间最小等待时间(秒)
 ACTION_WAIT_MAX = 2  # 操作间最大等待时间(秒)
 POST_LOAD_TIMEOUT = 10  # 帖子加载超时(秒)
 INTEREST_CLICK_WAIT = 1.5  # 点击有兴趣后等待时间(秒)
+AI_BATCH_SIZE = 10  # 批量AI分析帖子数量
+AI_CONCURRENT_VOTES = 3  # 并发投票数
+ROUND_INTERVAL_MIN = 5  # 每轮监控间隔最小(秒)
+ROUND_INTERVAL_MAX = 10  # 每轮监控间隔最大(秒)
 
 # ============ 反检测配置 ============
 USER_AGENTS = [
