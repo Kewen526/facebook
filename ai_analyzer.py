@@ -38,6 +38,7 @@ PROMPT_TEMPLATE = """请对以下帖子做角色与需求识别，判断发帖�
 - 找网站设计/建站/引流："need Shopify expert" / "design my website" / "bring traffic"
 - 找freelancer/VA/员工："need freelancers" / "looking for VA" / "hiring"
 - 找账号/数字资源："need eBay accounts" / "need Amazon account"
+- 加密货币/金融交易："USDT needed" / "BTC buyer" / "crypto exchange"
 - 找合作伙伴但不涉及产品采购
 
 ❌ **与商业完全无关**：
