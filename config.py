@@ -23,7 +23,7 @@ COOKIES_DIR = os.path.join(os.path.expanduser("~"), "fb_cookies")
 
 # ============ AI配置 ============
 ZHIPU_KEY_API = "http://47.95.157.46:8520/api/zhipuai_key"
-ZHIPU_MODEL = "glm-z1-flash"
+ZHIPU_MODEL = "glm-4.7-flash"
 
 # ============ 发送配置 ============
 SEND_COOLDOWN_SECONDS = 600  # 每个发送账号任务间隔10分钟
