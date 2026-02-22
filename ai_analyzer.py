@@ -10,125 +10,137 @@ from config import ZHIPU_KEY_API, ZHIPU_MODEL
 logger = logging.getLogger(__name__)
 
 # AI分析提示词模板
-PROMPT_TEMPLATE = """请对以下帖子做角色与需求识别，判断发帖人是否属于有采购需求的**潜在客户（买家）**。
+PROMPT_TEMPLATE = """请对以下帖子做角色与需求识别，判断发帖人是否属于需要**采购实体商品/寻找产品供应商**的潜在客户。
 
-⚠️ 核心原则：只有**买家**才是目标客户，**卖家/供应商/服务商/平台推广**统统判"否"。
-只根据帖子正文内容进行判定，忽略小组名称、用户昵称等非正文信息。
-帖子可能使用任何语言，判定逻辑适用于所有语言。
+⚠️ 核心原则：
+- 只有**寻找产品货源/供应商/采购代理**的人才是目标客户
+- 卖家/供应商/服务商/平台推广 → 判"否"
+- 找服务（网站设计、引流、VA等）、找人（招聘freelancer）、找账号/数字资源 → 判"否"
+- 只根据帖子正文内容判定，忽略小组名称、用户昵称等非正文信息
+- 帖子可能使用任何语言
 
 输入内容：
 文本内容：{用户原文}
 
-分析要求：
+**第一步：排除非目标（命中任一即判"否"）**
 
-**第一步：角色判定（最关键）**
-
-❌ **卖家/供应商/服务商 = 判"否"**：
-发帖人自己在提供产品或服务，而非寻求采购。特征：
-- 宣传自己的产品/服务："we offer" / "I supply" / "DM me" / "contact us" / "inbox me"
+❌ **卖家/供应商/服务商**：
+- 宣传自己的产品/服务："we offer" / "I supply" / "DM me" / "contact us"
 - 展示库存/价格："in stock" / "wholesale price" / "MOQ" / "ready to ship" / "available"
-- 招揽客户："looking for customers/buyers/clients" / "寻找客户" / "expand business"
-- 提供代发/物流服务："we provide dropshipping service" / "fulfillment center" / "shipping line"
-- 电商平台/工具推广："Shopify expert" / "store setup" / "marketing service"
-- 招聘/招商："hiring" / "join our team" / "become our agent/reseller"
+- 招揽客户："looking for customers/buyers/clients" / "寻找客户"
+- 提供代发/物流服务："we provide dropshipping service" / "fulfillment center"
 - 展示成功案例/教程："how to start dropshipping" / "my store made $X"
 - 产品广告/展示帖：只展示产品参数、价格，无采购意图
 - 卖家找渠道："We manufacture…" + "looking for partners to distribute"
 - 留联系方式招商：品牌名+WhatsApp/微信号组合
 
-✅ **买家（潜在客户）= 判"是"**：
-发帖人自身有采购需求，满足以下**任一条件**即可判"是"：
+❌ **找服务/找人/找数字资源（不是找产品货源）**：
+- 找网站设计/建站/引流："need Shopify expert" / "design my website" / "bring traffic"
+- 找freelancer/VA/员工："need freelancers" / "looking for VA" / "hiring"
+- 找账号/数字资源："need eBay accounts" / "need Amazon account"
+- 加密货币/金融交易："USDT needed" / "BTC buyer" / "crypto exchange"
+- 找合作伙伴但不涉及产品采购
 
-1. **采购需求表达**：
-   - "I'm looking for…" / "I need…" / "I want to buy/source…"
-   - "Can anyone help me find…" / "Does anyone know where to get…"
-   - "Where can I buy…" / "Who sells…"
-   - 寻找特定产品并表达了购买意愿
-
-2. **寻找供应商/代理**：
-   - "looking for supplier" / "anyone can source…" / "need an agent"
-   - "looking for Chinese supplier/agent" / "sourcing agent"
-   - 在寻找能提供产品的供应商或采购代理
-
-3. **物流/发货需求**：
-   - "ship to [国家/地区]" / "shipping to Europe/Italy…"
-   - "need items shipped from China to…" / "deliver to my country"
-   - 表达了跨境发货或物流相关的采购需求
-
-4. **代发/采购相关询问**：
-   - 询问价格/物流时效："how much…" / "shipping cost to…" / "delivery time"
-   - 讨论采购渠道：提到1688/Alibaba/Taobao等平台的采购意图
-   - 寻找代发服务的买家（不是提供代发服务的卖家）
-
-❌ **与采购业务完全无关 = 判"否"**：
+❌ **与商业完全无关**：
 - 交友/征婚/社交帖
 - 个人生活分享、娱乐、新闻
 - 正文过短、无实质含义
-- 纯转发/分享链接，无个人表达
+
+**第二步：确认目标客户（满足任一即判"是"）**
+
+✅ 发帖人在寻找**实体商品的货源或产品供应商**：
+
+1. **寻找产品/货源**：
+   - "looking for [具体产品]" / "I need [产品名]" / "where can I buy [产品]"
+   - "I want to source/buy [商品]" / "anyone selling [商品]"
+   - 明确提到要采购某种实体商品
+
+2. **寻找产品供应商/采购代理**：
+   - "looking for supplier" / "need a sourcing agent" / "looking for vendor"
+   - 经营店铺并寻找产品供应商来进货
+   - 有买家资源，在寻找能供货的供应商
+
+3. **产品物流/发货需求**：
+   - "ship [产品] to [国家]" / "need items shipped from China"
+   - 表达了实体商品的跨境发货需求
+
+4. **产品采购询问**：
+   - 询问某类商品的价格/货源/物流时效
+   - 提到1688/Alibaba/Taobao等平台的产品采购意图
+   - 寻找代发服务来销售实体产品的买家
 
 输出格式（必须严格遵守）：
 
 判定结果：是/否
 
 判定依据：
-1. 角色判定：发帖人是买家/卖家/服务商/无关
+1. 角色判定：发帖人是买家/卖家/服务商/找服务/无关
 2. 关键表达匹配：找出文本中的关键表达
-3. 需求明确性：用户是否明确表达了采购/寻找供应商/寻找代理的需求
+3. 需求类型：产品采购 / 服务需求 / 招聘 / 数字资源 / 无关
 4. 综合结论：简要说明判定理由
 
-示例1（是 - 寻找供应商）：
+示例1（是 - 寻找产品供应商）：
 输入：I am looking for heated slippers to ship to Europe, anyone know a good supplier?
 判定结果：是
 判定依据：
-1. 角色判定：买家 - 第一人称表达采购需求
-2. 关键表达匹配："looking for" + "ship to Europe" + "good supplier"
-3. 需求明确性：明确需要采购加热拖鞋并寻找供应商
-4. 综合结论：有明确采购需求的潜在客户
+1. 角色判定：买家 - 第一人称寻找产品供应商
+2. 关键表达匹配："looking for heated slippers" + "ship to Europe" + "good supplier"
+3. 需求类型：产品采购 - 寻找实体商品货源
+4. 综合结论：有明确产品采购需求的潜在客户
 
-示例2（是 - 寻找代理）：
-输入：I need a sourcing agent to help me find electronics for my store, can anyone recommend?
+示例2（是 - 店主找供应商）：
+输入：I am actively running a Shopify dropshipping store and looking for reliable suppliers for scalable products with long-term cooperation.
 判定结果：是
 判定依据：
-1. 角色判定：买家 - 第一人称寻找采购代理
-2. 关键表达匹配："I need a sourcing agent" + "help me find"
-3. 需求明确性：明确在寻找采购代理帮忙找货
-4. 综合结论：有采购代理需求的潜在客户
+1. 角色判定：买家 - 店主寻找产品供应商
+2. 关键表达匹配："running a Shopify dropshipping store" + "looking for reliable suppliers" + "scalable products"
+3. 需求类型：产品采购 - 经营店铺需要产品货源
+4. 综合结论：Dropshipping店主寻找产品供应商，是目标客户
 
-示例3（是 - 采购需求）：
-输入：Does anyone know where I can buy custom phone cases in bulk? Need about 500 pieces for my online shop.
+示例3（是 - 有买家资源找供应商）：
+输入：Looking for Reliable Suppliers! We have active buyers in the USA and Europe — let's work together and grow!
 判定结果：是
 判定依据：
-1. 角色判定：买家 - 询问采购渠道
-2. 关键表达匹配："where I can buy" + "in bulk" + "Need about 500 pieces"
-3. 需求明确性：有明确的产品和数量采购需求
-4. 综合结论：有批量采购需求的潜在客户
+1. 角色判定：买家/分销商 - 有买家资源在找供应商供货
+2. 关键表达匹配："Looking for Reliable Suppliers" + "active buyers in the USA and Europe"
+3. 需求类型：产品采购 - 需要供应商提供产品给其买家
+4. 综合结论：有销售渠道的分销商在找产品供应商，是目标客户
 
-示例4（否 - 卖家推广）：
+示例4（否 - 找服务不是找产品）：
+输入：I need a shopify expert who design my website and bring traffic on website.
+判定结果：否
+判定依据：
+1. 角色判定：服务采购方 - 找网站设计和引流服务
+2. 关键表达匹配："need a shopify expert" + "design my website" + "bring traffic"
+3. 需求类型：服务需求 - 不是产品采购
+4. 综合结论：找建站/引流服务，不是找产品货源，不是目标客户
+
+示例5（否 - 找账号/数字资源）：
+输入：I am professional ebay VA, I need the ebay accounts on the percentage base
+判定结果：否
+判定依据：
+1. 角色判定：服务从业者 - eBay VA找账号资源
+2. 关键表达匹配："ebay VA" + "need ebay accounts" + "percentage base"
+3. 需求类型：数字资源 - 不是实体产品采购
+4. 综合结论：找eBay账号来管理，不是找产品货源，不是目标客户
+
+示例6（否 - 招聘/找人）：
+输入：Need Trustable Freelancers WhatsApp
+判定结果：否
+判定依据：
+1. 角色判定：雇主 - 在招聘freelancer
+2. 关键表达匹配："Need Trustable Freelancers"
+3. 需求类型：招聘 - 不是产品采购
+4. 综合结论：招人帖，不是找产品货源，不是目标客户
+
+示例7（否 - 卖家推广）：
 输入：🔥 We offer dropshipping service from China! DM for free consultation! WhatsApp: +86 138xxxx
 判定结果：否
 判定依据：
 1. 角色判定：服务商 - 推广自己的代发服务
-2. 关键表达匹配："We offer" + "DM for" + WhatsApp联系方式 = 卖家话术
-3. 需求明确性：发帖人在提供服务，不是在寻找服务
-4. 综合结论：服务商推广帖，不是目标客户
-
-示例5（否 - 供应商广告）：
-输入：High quality phone cases wholesale, MOQ 50pcs, ready to ship worldwide! Contact me for catalog.
-判定结果：否
-判定依据：
-1. 角色判定：供应商 - 展示产品招揽订单
-2. 关键表达匹配："wholesale" + "MOQ" + "ready to ship" + "Contact me"
-3. 需求明确性：发帖人是在卖货，不是在采购
-4. 综合结论：供应商广告帖，不是目标客户
-
-示例6（否 - 交友帖）：
-输入：I'm looking for a good partner for me, the most important thing is to be loyal
-判定结果：否
-判定依据：
-1. 角色判定：非商业帖 - 交友/征婚
-2. 关键表达匹配："partner" 指伴侣，与采购无关
-3. 需求明确性：与采购业务完全无关
-4. 综合结论：交友帖，不是目标客户"""
+2. 关键表达匹配："We offer" + "DM for" + WhatsApp联系方式
+3. 需求类型：无 - 发帖人在提供服务
+4. 综合结论：服务商推广帖，不是目标客户"""
 
 
 def get_zhipu_keys():
