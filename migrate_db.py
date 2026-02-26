@@ -92,6 +92,29 @@ def run_migration():
             print(f"  [WARN] {table}.{col}: {e}")
             conn.rollback()
 
+    # 添加索引优化翻译查询
+    indexes = [
+        ("posts", "idx_posts_content_zh", "content_zh"),
+        ("posts", "idx_posts_is_target", "is_target"),
+    ]
+    for table, idx_name, col in indexes:
+        try:
+            cursor.execute(
+                "SELECT COUNT(*) FROM information_schema.STATISTICS "
+                "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND INDEX_NAME=%s",
+                (DB_NAME, table, idx_name)
+            )
+            exists = cursor.fetchone()[0]
+            if exists:
+                print(f"  [SKIP] 索引 {idx_name} 已存在")
+            else:
+                cursor.execute(f"CREATE INDEX `{idx_name}` ON `{table}` (`{col}`)")
+                conn.commit()
+                print(f"  [OK] 已创建索引 {idx_name}")
+        except Exception as e:
+            print(f"  [WARN] 索引 {idx_name}: {e}")
+            conn.rollback()
+
     # 创建默认admin账号
     try:
         cursor.execute("SELECT COUNT(*) FROM users WHERE username='admin'")
