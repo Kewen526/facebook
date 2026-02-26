@@ -529,6 +529,8 @@
                         <label>结束日期:</label>
                         <input type="date" v-model="reportFilters.end_date" />
                         <button class="btn btn-primary" @click="loadReport">查询</button>
+                        <button v-if="currentUser && currentUser.role === 'admin'" class="btn" style="margin-left:12px; background:#f7b928; color:#fff;" @click="retryTranslations">重试翻译失败</button>
+                        <button v-if="currentUser && currentUser.role === 'admin'" class="btn" style="margin-left:6px; background:#65676b; color:#fff;" @click="testTranslation">测试翻译API</button>
                     </div>
                     <div class="report-stats">
                         <div class="report-stat-card clickable" @click="drillDownReport('total')">
@@ -947,6 +949,25 @@ createApp({
             loadPosts(1);
         }
 
+        async function retryTranslations() {
+            if (!confirm('确认重置所有翻译失败的帖子，让系统重新翻译？')) return;
+            const d = await fetchAPI('/api/translate/retry', { method: 'POST' });
+            if (d && d.success) {
+                alert(d.message);
+            } else {
+                alert('操作失败: ' + (d && d.message || '未知错误'));
+            }
+        }
+
+        async function testTranslation() {
+            const d = await fetchAPI('/api/translate/test');
+            if (d && d.success) {
+                alert('翻译API正常！结果: ' + JSON.stringify(d.result));
+            } else {
+                alert('翻译API异常: ' + (d && d.message || '未知错误'));
+            }
+        }
+
         // 用户管理
         async function loadUsers() {
             const d = await fetchAPI('/api/users');
@@ -1165,7 +1186,7 @@ createApp({
             users, newUser, managers,
             reportFilters, reportData,
             doLogin, doLogout,
-            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks, loadReport, drillDownReport,
+            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks, loadReport, drillDownReport, retryTranslations, testTranslation,
             loadUsers, createUser, toggleUser, resetUserPassword, deleteUser,
             startMonitor, stopMonitor, startSending, stopSending, refreshData, openPostDetail,
             createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie,

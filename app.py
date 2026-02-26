@@ -499,7 +499,7 @@ def translate_post(post_db_id):
     if not post:
         return jsonify({"success": False, "message": "帖子不存在"}), 404
 
-    if post.content_zh:
+    if post.content_zh and post.content_zh != '[翻译失败]':
         return jsonify({"success": True, "data": {"content_zh": post.content_zh}, "message": "已有翻译"})
 
     if not post.content or not post.content.strip():
@@ -566,23 +566,38 @@ _translate_stop = threading.Event()
 def _auto_translate_worker():
     """后台线程：自动翻译所有未翻译的帖子，优先目标客户+最新日期"""
     logger.info("自动翻译线程已启动")
+    _retry_counter = 0
     while not _translate_stop.is_set():
         try:
             db = get_session()
             try:
-                # 优先翻译目标客户的帖子（最新日期优先）
+                # 优先翻译未翻译的帖子
                 untranslated = db.query(Post).filter(
                     Post.content != None,
                     Post.content != '',
                     Post.content_zh == None
                 ).order_by(
-                    Post.is_target.desc(),       # 目标客户优先
-                    Post.created_at.desc()       # 最新日期优先
+                    Post.is_target.desc(),
+                    Post.created_at.desc()
                 ).limit(10).all()
 
+                # 每10轮（约5分钟）也重试翻译失败的帖子
                 if not untranslated:
-                    _translate_stop.wait(30)
-                    continue
+                    _retry_counter += 1
+                    if _retry_counter >= 10:
+                        _retry_counter = 0
+                        failed = db.query(Post).filter(
+                            Post.content_zh == '[翻译失败]'
+                        ).order_by(Post.is_target.desc(), Post.created_at.desc()).limit(5).all()
+                        if failed:
+                            logger.info(f"重试 {len(failed)} 条翻译失败的帖子")
+                            untranslated = failed
+                        else:
+                            _translate_stop.wait(30)
+                            continue
+                    else:
+                        _translate_stop.wait(30)
+                        continue
 
                 for post in untranslated:
                     if _translate_stop.is_set():
@@ -620,6 +635,44 @@ def start_auto_translate():
     _translate_stop.clear()
     _translate_thread = threading.Thread(target=_auto_translate_worker, daemon=True, name="auto-translate")
     _translate_thread.start()
+
+
+@app.route('/api/translate/retry', methods=['POST'])
+@login_required
+def retry_failed_translations():
+    """重置所有翻译失败的帖子，让后台线程重新翻译"""
+    user = request.current_user
+    if user.role != 'admin':
+        return jsonify({"success": False, "message": "仅管理员可操作"}), 403
+    db = request.db
+    count = db.query(Post).filter(Post.content_zh == '[翻译失败]').update({Post.content_zh: None})
+    db.commit()
+    return jsonify({"success": True, "message": f"已重置 {count} 条翻译失败记录，后台线程将自动重新翻译"})
+
+
+@app.route('/api/translate/test')
+@login_required
+def test_translation():
+    """测试百度翻译API是否可用"""
+    import hashlib
+    import random as _rand
+    user = request.current_user
+    if user.role != 'admin':
+        return jsonify({"success": False, "message": "仅管理员可操作"}), 403
+    try:
+        text = "Hello, this is a test."
+        salt = str(_rand.randint(10000, 99999))
+        sign_str = BAIDU_TRANSLATE_APPID + text + salt + BAIDU_TRANSLATE_SECRET
+        sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
+        params = {'q': text, 'from': 'en', 'to': 'zh', 'appid': BAIDU_TRANSLATE_APPID, 'salt': salt, 'sign': sign}
+        resp = http_requests.get(BAIDU_TRANSLATE_URL, params=params, timeout=10)
+        result = resp.json()
+        if 'trans_result' in result:
+            return jsonify({"success": True, "message": "百度翻译API正常", "result": result})
+        else:
+            return jsonify({"success": False, "message": f"API错误: code={result.get('error_code')}, msg={result.get('error_msg')}", "result": result})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"请求失败: {e}"})
 
 
 @app.route('/api/stats')
