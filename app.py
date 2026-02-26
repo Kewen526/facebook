@@ -9,7 +9,7 @@ from flask import Flask, render_template, jsonify, request, session as flask_ses
 from flask_socketio import SocketIO
 from sqlalchemy import func, and_
 
-from config import FLASK_PORT, COOKIES_DIR, ZHIPU_KEY_API, ZHIPU_MODEL
+from config import FLASK_PORT, COOKIES_DIR
 from models import (
     init_db, get_session, Post, PostAction, MonitorLog,
     Account, WhatsAppAccount, SendTask, User, PostFeedback
