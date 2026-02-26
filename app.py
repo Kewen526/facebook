@@ -325,6 +325,7 @@ def get_posts():
     source = request.args.get('source', '')
     is_target = request.args.get('is_target', '')
     search = request.args.get('search', '')
+    feedback_filter = request.args.get('feedback_filter', '')
 
     user = request.current_user
     db = request.db
@@ -348,6 +349,17 @@ def get_posts():
         query = query.filter(Post.is_target == False)
     if search:
         query = query.filter(Post.content.ilike(f'%{search}%'))
+
+    # 反馈筛选：通过join PostFeedback过滤
+    if feedback_filter == 'manual_target':
+        query = query.join(PostFeedback, Post.id == PostFeedback.post_id).filter(PostFeedback.is_target_manual == True)
+    elif feedback_filter == 'contacted':
+        query = query.join(PostFeedback, Post.id == PostFeedback.post_id).filter(PostFeedback.is_contacted == True)
+    elif feedback_filter == 'has_whatsapp':
+        query = query.join(PostFeedback, Post.id == PostFeedback.post_id).filter(
+            PostFeedback.whatsapp_number != None,
+            PostFeedback.whatsapp_number != ''
+        )
 
     total = query.count()
     posts = query.offset((page - 1) * per_page).limit(per_page).all()
