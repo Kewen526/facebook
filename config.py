@@ -25,6 +25,11 @@ COOKIES_DIR = os.path.join(os.path.expanduser("~"), "fb_cookies")
 ZHIPU_KEY_API = "http://47.95.157.46:8520/api/zhipuai_key"
 ZHIPU_MODEL = "glm-4.7-flash"
 
+# ============ 百度翻译配置 ============
+BAIDU_TRANSLATE_APPID = "20230724001755506"
+BAIDU_TRANSLATE_SECRET = "JAXZq_RAOCOPY3Af440n"
+BAIDU_TRANSLATE_URL = "https://fanyi-api.baidu.com/api/trans/vip/translate"
+
 # ============ 发送配置 ============
 SEND_COOLDOWN_SECONDS = 600  # 每个发送账号任务间隔10分钟
 DAILY_SEND_LIMIT = 4  # 每个发送账号每天最多执行的发送任务数

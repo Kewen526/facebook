@@ -9,7 +9,10 @@ from flask import Flask, render_template, jsonify, request, session as flask_ses
 from flask_socketio import SocketIO
 from sqlalchemy import func, and_
 
-from config import FLASK_PORT, COOKIES_DIR, ZHIPU_KEY_API, ZHIPU_MODEL
+from config import (
+    FLASK_PORT, COOKIES_DIR, ZHIPU_KEY_API, ZHIPU_MODEL,
+    BAIDU_TRANSLATE_APPID, BAIDU_TRANSLATE_SECRET, BAIDU_TRANSLATE_URL
+)
 from models import (
     init_db, get_session, Post, PostAction, MonitorLog,
     Account, WhatsAppAccount, SendTask, User, PostFeedback
@@ -504,61 +507,42 @@ def translate_post(post_db_id):
         return jsonify({"success": False, "message": f"翻译失败: {e}"}), 500
 
 
-def _get_translate_key():
-    """获取一个智谱AI API密钥用于翻译"""
-    try:
-        proxies = {'http': None, 'https': None}
-        resp = http_requests.post(ZHIPU_KEY_API, proxies=proxies, timeout=10)
-        if resp.status_code == 200:
-            result = resp.json()
-            if result.get("success") and "data" in result:
-                keys = [item["key"] for item in result["data"]]
-                if keys:
-                    import random
-                    return random.choice(keys)
-    except Exception as e:
-        logger.error(f"获取翻译密钥失败: {e}")
-    return None
-
-
 def _translate_to_chinese(text):
-    """使用智谱AI将文本翻译为中文"""
+    """使用百度翻译API将文本翻译为中文"""
+    import hashlib
+    import random as _rand
     try:
         if not text or not text.strip():
             return None
-        # 截取前3000字符
-        text = text[:3000]
+        # 百度翻译API单次最大6000字节，截取前2000字符确保安全
+        text = text[:2000]
 
-        api_key = _get_translate_key()
-        if not api_key:
-            logger.error("无法获取智谱AI密钥，翻译失败")
+        salt = str(_rand.randint(10000, 99999))
+        sign_str = BAIDU_TRANSLATE_APPID + text + salt + BAIDU_TRANSLATE_SECRET
+        sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
+
+        params = {
+            'q': text,
+            'from': 'auto',
+            'to': 'zh',
+            'appid': BAIDU_TRANSLATE_APPID,
+            'salt': salt,
+            'sign': sign,
+        }
+
+        resp = http_requests.get(BAIDU_TRANSLATE_URL, params=params, timeout=10)
+        result = resp.json()
+
+        if 'trans_result' in result:
+            translated_parts = [item['dst'] for item in result['trans_result']]
+            return '\n'.join(translated_parts)
+        else:
+            error_code = result.get('error_code', 'unknown')
+            error_msg = result.get('error_msg', 'unknown')
+            logger.error(f"百度翻译API错误: code={error_code}, msg={error_msg}")
             return None
-
-        import urllib3
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        os.environ['NO_PROXY'] = '*'
-        os.environ['HTTP_PROXY'] = ''
-        os.environ['HTTPS_PROXY'] = ''
-
-        from zhipuai import ZhipuAI
-        client = ZhipuAI(api_key=api_key, timeout=30, max_retries=1)
-
-        response = client.chat.completions.create(
-            model=ZHIPU_MODEL,
-            messages=[{"role": "user", "content": f"请将以下文本翻译为中文，只返回翻译结果，不要添加任何解释：\n\n{text}"}],
-            temperature=0.3,
-            max_tokens=2048,
-        )
-
-        if response.choices and len(response.choices) > 0:
-            content = response.choices[0].message.content
-            if content:
-                import re
-                cleaned = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-                return cleaned if cleaned else None
-        return None
     except Exception as e:
-        logger.error(f"智谱AI翻译失败: {e}")
+        logger.error(f"百度翻译失败: {e}")
         return None
 
 
@@ -605,8 +589,8 @@ def _auto_translate_worker():
                     except Exception as e:
                         db.rollback()
                         logger.error(f"翻译帖子 {post.id} 出错: {e}")
-                    # 每条翻译之间间隔2秒，避免API限流
-                    _translate_stop.wait(2)
+                    # 百度翻译标准版QPS=1，间隔1.1秒确保不超限
+                    _translate_stop.wait(1.1)
             finally:
                 db.close()
         except Exception as e:
