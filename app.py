@@ -9,7 +9,10 @@ from flask import Flask, render_template, jsonify, request, session as flask_ses
 from flask_socketio import SocketIO
 from sqlalchemy import func, and_
 
-from config import FLASK_PORT, COOKIES_DIR
+from config import (
+    FLASK_PORT, COOKIES_DIR, ZHIPU_KEY_API, ZHIPU_MODEL,
+    BAIDU_TRANSLATE_APPID, BAIDU_TRANSLATE_SECRET, BAIDU_TRANSLATE_URL
+)
 from models import (
     init_db, get_session, Post, PostAction, MonitorLog,
     Account, WhatsAppAccount, SendTask, User, PostFeedback
@@ -505,32 +508,41 @@ def translate_post(post_db_id):
 
 
 def _translate_to_chinese(text):
-    """使用Google Translate将文本翻译为中文"""
+    """使用百度翻译API将文本翻译为中文"""
+    import hashlib
+    import random as _rand
     try:
         if not text or not text.strip():
             return None
-        # 截取前5000字符
-        text = text[:5000]
-        resp = http_requests.get(
-            'https://translate.googleapis.com/translate_a/single',
-            params={
-                'client': 'gtx',
-                'sl': 'auto',
-                'tl': 'zh-CN',
-                'dt': 't',
-                'q': text,
-            },
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            logger.error(f"Google翻译HTTP错误: {resp.status_code}")
-            return None
+        # 百度翻译API单次最大6000字节，截取前2000字符确保安全
+        text = text[:2000]
+
+        salt = str(_rand.randint(10000, 99999))
+        sign_str = BAIDU_TRANSLATE_APPID + text + salt + BAIDU_TRANSLATE_SECRET
+        sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
+
+        params = {
+            'q': text,
+            'from': 'auto',
+            'to': 'zh',
+            'appid': BAIDU_TRANSLATE_APPID,
+            'salt': salt,
+            'sign': sign,
+        }
+
+        resp = http_requests.get(BAIDU_TRANSLATE_URL, params=params, timeout=10)
         result = resp.json()
-        # 拼接所有翻译片段
-        translated = ''.join(part[0] for part in result[0] if part[0])
-        return translated.strip() if translated else None
+
+        if 'trans_result' in result:
+            translated_parts = [item['dst'] for item in result['trans_result']]
+            return '\n'.join(translated_parts)
+        else:
+            error_code = result.get('error_code', 'unknown')
+            error_msg = result.get('error_msg', 'unknown')
+            logger.error(f"百度翻译API错误: code={error_code}, msg={error_msg}")
+            return None
     except Exception as e:
-        logger.error(f"Google翻译失败: {e}")
+        logger.error(f"百度翻译失败: {e}")
         return None
 
 
@@ -540,21 +552,23 @@ _translate_stop = threading.Event()
 
 
 def _auto_translate_worker():
-    """后台线程：自动翻译所有未翻译的帖子"""
+    """后台线程：自动翻译所有未翻译的帖子，优先目标客户+最新日期"""
     logger.info("自动翻译线程已启动")
     while not _translate_stop.is_set():
         try:
             db = get_session()
             try:
-                # 每次取一批未翻译的帖子（有内容但没有中文翻译）
+                # 优先翻译目标客户的帖子（最新日期优先）
                 untranslated = db.query(Post).filter(
                     Post.content != None,
                     Post.content != '',
                     Post.content_zh == None
-                ).order_by(Post.created_at.desc()).limit(10).all()
+                ).order_by(
+                    Post.is_target.desc(),       # 目标客户优先
+                    Post.created_at.desc()       # 最新日期优先
+                ).limit(10).all()
 
                 if not untranslated:
-                    # 没有待翻译的帖子，等待30秒再检查
                     _translate_stop.wait(30)
                     continue
 
@@ -566,17 +580,17 @@ def _auto_translate_worker():
                         if content_zh:
                             post.content_zh = content_zh
                             db.commit()
-                            logger.info(f"自动翻译成功: 帖子ID={post.id}")
+                            tag = "目标客户" if post.is_target else "非目标"
+                            logger.info(f"自动翻译成功: 帖子ID={post.id} [{tag}]")
                         else:
-                            # 翻译失败，标记为翻译失败以避免反复重试
                             post.content_zh = '[翻译失败]'
                             db.commit()
                             logger.warning(f"自动翻译失败: 帖子ID={post.id}")
                     except Exception as e:
                         db.rollback()
                         logger.error(f"翻译帖子 {post.id} 出错: {e}")
-                    # 每条翻译之间间隔1秒，避免API限流
-                    _translate_stop.wait(1)
+                    # 百度翻译标准版QPS=1，间隔1.1秒确保不超限
+                    _translate_stop.wait(1.1)
             finally:
                 db.close()
         except Exception as e:
