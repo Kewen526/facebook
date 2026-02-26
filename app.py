@@ -1,5 +1,7 @@
 import logging
 import os
+import threading
+import time
 import requests as http_requests
 from datetime import datetime, timezone, timedelta
 from functools import wraps
@@ -525,6 +527,68 @@ def _translate_to_chinese(text):
     except Exception as e:
         logger.error(f"翻译失败: {e}")
         return None
+
+
+# ============ 后台自动翻译线程 ============
+_translate_thread = None
+_translate_stop = threading.Event()
+
+
+def _auto_translate_worker():
+    """后台线程：自动翻译所有未翻译的帖子"""
+    logger.info("自动翻译线程已启动")
+    while not _translate_stop.is_set():
+        try:
+            db = get_session()
+            try:
+                # 每次取一批未翻译的帖子（有内容但没有中文翻译）
+                untranslated = db.query(Post).filter(
+                    Post.content != None,
+                    Post.content != '',
+                    Post.content_zh == None
+                ).order_by(Post.created_at.desc()).limit(10).all()
+
+                if not untranslated:
+                    # 没有待翻译的帖子，等待30秒再检查
+                    _translate_stop.wait(30)
+                    continue
+
+                for post in untranslated:
+                    if _translate_stop.is_set():
+                        break
+                    try:
+                        content_zh = _translate_to_chinese(post.content)
+                        if content_zh:
+                            post.content_zh = content_zh
+                            db.commit()
+                            logger.info(f"自动翻译成功: 帖子ID={post.id}")
+                        else:
+                            # 翻译失败，标记为翻译失败以避免反复重试
+                            post.content_zh = '[翻译失败]'
+                            db.commit()
+                            logger.warning(f"自动翻译失败: 帖子ID={post.id}")
+                    except Exception as e:
+                        db.rollback()
+                        logger.error(f"翻译帖子 {post.id} 出错: {e}")
+                    # 每条翻译之间间隔1秒，避免API限流
+                    _translate_stop.wait(1)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"自动翻译线程异常: {e}")
+            _translate_stop.wait(10)
+
+    logger.info("自动翻译线程已停止")
+
+
+def start_auto_translate():
+    """启动自动翻译后台线程"""
+    global _translate_thread
+    if _translate_thread and _translate_thread.is_alive():
+        return
+    _translate_stop.clear()
+    _translate_thread = threading.Thread(target=_auto_translate_worker, daemon=True, name="auto-translate")
+    _translate_thread.start()
 
 
 @app.route('/api/stats')
@@ -1083,6 +1147,7 @@ def get_stats_report():
 
 if __name__ == '__main__':
     init_db()
+    start_auto_translate()
     logger.info(f"Facebook帖子监控系统启动，端口: {FLASK_PORT}")
     logger.info(f"访问 http://localhost:{FLASK_PORT} 查看控制面板")
     app.run(host='0.0.0.0', port=FLASK_PORT, debug=False, threaded=True)

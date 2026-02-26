@@ -315,7 +315,7 @@
                                 <div class="post-content-zh">{{ post.content_zh }}</div>
                             </div>
                             <div class="post-content-block" v-else-if="post.content">
-                                <button class="translate-btn" @click.stop="translatePost(post)">点击翻译为中文</button>
+                                <div style="color:#65676b; font-size:13px; font-style:italic;">翻译中...</div>
                             </div>
                         </div>
 
@@ -693,6 +693,10 @@
                     <div class="detail-section" v-if="selectedPost.content_zh">
                         <h3>中文翻译</h3>
                         <div class="detail-content" style="border-left:3px solid #1877f2;">{{ selectedPost.content_zh }}</div>
+                    </div>
+                    <div class="detail-section" v-else-if="selectedPost.content">
+                        <h3>中文翻译</h3>
+                        <div class="detail-content" style="color:#65676b; font-style:italic;">翻译中...</div>
                     </div>
                     <div class="detail-section" v-if="selectedPost.ai_result">
                         <h3>AI分析详情</h3>
