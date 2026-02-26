@@ -12,6 +12,7 @@
         .header { background: #1877f2; color: white; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
         .header h1 { font-size: 20px; font-weight: 600; }
         .header-actions { display: flex; gap: 12px; align-items: center; }
+        .header-user { font-size: 13px; color: rgba(255,255,255,0.85); }
         .btn { padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
         .btn-start { background: #42b72a; color: white; }
         .btn-start:hover { background: #36a420; }
@@ -23,8 +24,24 @@
         .btn-primary:hover { background: #166fe5; }
         .btn-danger { background: #fa3e3e; color: white; font-size: 12px; padding: 4px 10px; }
         .btn-sm { padding: 4px 12px; font-size: 12px; }
+        .btn-outline { background: white; color: #1877f2; border: 1px solid #1877f2; }
+        .btn-outline:hover { background: #e7f3ff; }
+        .btn-success { background: #42b72a; color: white; }
+        .btn-warning { background: #f7b928; color: white; }
 
         .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        /* 登录页面 */
+        .login-wrapper { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1877f2 0%, #42b72a 100%); }
+        .login-card { background: white; border-radius: 12px; padding: 40px; width: 400px; max-width: 90%; box-shadow: 0 8px 40px rgba(0,0,0,0.2); }
+        .login-card h2 { text-align: center; margin-bottom: 8px; font-size: 24px; color: #1877f2; }
+        .login-card p { text-align: center; color: #65676b; margin-bottom: 24px; font-size: 14px; }
+        .login-card .form-group { margin-bottom: 16px; }
+        .login-card label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: #1c1e21; }
+        .login-card input { width: 100%; padding: 12px 14px; border: 1px solid #dddfe2; border-radius: 8px; font-size: 15px; outline: none; }
+        .login-card input:focus { border-color: #1877f2; box-shadow: 0 0 0 2px rgba(24,119,242,0.2); }
+        .login-card .btn { width: 100%; padding: 12px; font-size: 16px; margin-top: 8px; }
+        .login-error { color: #fa3e3e; font-size: 13px; text-align: center; margin-top: 12px; }
 
         .status-bar { background: white; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
         .status-item { display: flex; flex-direction: column; gap: 4px; }
@@ -44,7 +61,7 @@
         .stat-card.liked .stat-number { color: #f7b928; }
 
         .tabs { display: flex; gap: 0; margin-bottom: 20px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.1); flex-wrap: wrap; }
-        .tab { padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: 500; color: #65676b; border-bottom: 3px solid transparent; transition: all 0.2s; flex: 1; text-align: center; min-width: 100px; }
+        .tab { padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: 500; color: #65676b; border-bottom: 3px solid transparent; transition: all 0.2s; flex: 1; text-align: center; min-width: 80px; }
         .tab:hover { background: #f0f2f5; }
         .tab.active { color: #1877f2; border-bottom-color: #1877f2; }
 
@@ -54,7 +71,7 @@
         .filter-input { flex: 1; min-width: 200px; }
 
         .post-list { display: flex; flex-direction: column; gap: 12px; }
-        .post-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s; }
+        .post-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: all 0.2s; }
         .post-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         .post-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
         .post-author { font-weight: 600; font-size: 15px; }
@@ -70,10 +87,28 @@
         .badge-interested { background: #d4edda; color: #155724; }
         .badge-not-interested { background: #f8d7da; color: #721c24; }
         .badge-discovered { background: #e8daef; color: #6c3483; }
-        .post-content { font-size: 14px; line-height: 1.6; color: #1c1e21; margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; max-height: 150px; overflow: hidden; position: relative; }
-        .post-content.expanded { max-height: none; }
-        .post-content:not(.expanded)::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, white); }
-        .post-actions-bar { display: flex; gap: 12px; align-items: center; padding-top: 12px; border-top: 1px solid #e4e6eb; }
+
+        /* 帖子内容区域 - 直接展示 */
+        .post-content-area { margin-bottom: 12px; }
+        .post-content-block { margin-bottom: 8px; }
+        .post-content-label { font-size: 11px; font-weight: 600; color: #65676b; text-transform: uppercase; margin-bottom: 4px; padding: 2px 6px; background: #f0f2f5; display: inline-block; border-radius: 4px; }
+        .post-content-text { font-size: 14px; line-height: 1.6; color: #1c1e21; white-space: pre-wrap; word-break: break-word; }
+        .post-content-zh { font-size: 14px; line-height: 1.6; color: #333; white-space: pre-wrap; word-break: break-word; background: #f8f9fa; padding: 10px; border-radius: 6px; border-left: 3px solid #1877f2; }
+        .translate-btn { font-size: 12px; color: #1877f2; cursor: pointer; background: none; border: none; padding: 2px 6px; }
+        .translate-btn:hover { text-decoration: underline; }
+
+        /* 反馈按钮组 */
+        .feedback-bar { display: flex; gap: 8px; align-items: center; padding-top: 12px; border-top: 1px solid #e4e6eb; flex-wrap: wrap; }
+        .feedback-btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #dddfe2; background: white; transition: all 0.2s; }
+        .feedback-btn:hover { background: #f0f2f5; }
+        .feedback-btn.active-target { background: #e7f5e0; border-color: #42b72a; color: #42b72a; }
+        .feedback-btn.active-contacted { background: #e4f0fc; border-color: #1877f2; color: #1877f2; }
+        .feedback-btn.active-whatsapp { background: #d4edda; border-color: #25d366; color: #25d366; }
+        .feedback-whatsapp-input { display: flex; gap: 6px; align-items: center; }
+        .feedback-whatsapp-input input { padding: 4px 10px; border: 1px solid #dddfe2; border-radius: 16px; font-size: 12px; width: 160px; outline: none; }
+        .feedback-whatsapp-input input:focus { border-color: #25d366; }
+
+        .post-actions-bar { display: flex; gap: 12px; align-items: center; padding-top: 8px; }
         .post-link { color: #1877f2; text-decoration: none; font-size: 13px; }
         .post-link:hover { text-decoration: underline; }
 
@@ -114,7 +149,6 @@
         .empty-state { text-align: center; padding: 60px 20px; color: #65676b; }
         .empty-state h3 { margin-bottom: 8px; }
 
-        /* 管理表格 */
         .mgmt-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .mgmt-card h3 { font-size: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
         .mgmt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -129,522 +163,556 @@
         .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: white; border-radius: 50%; transition: 0.3s; }
         .toggle.on::after { left: 20px; }
 
-        /* 统计面板 */
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
-        .dashboard-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .dashboard-card h4 { font-size: 14px; color: #65676b; margin-bottom: 12px; }
-        .dashboard-stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f2f5; font-size: 13px; }
-        .dashboard-stat:last-child { border-bottom: none; }
+
+        /* 统计报表 */
+        .report-filters { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+        .report-filters input[type="date"] { padding: 8px 12px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; }
+        .report-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .report-stat-card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); text-align: center; }
+        .report-stat-card .number { font-size: 28px; font-weight: 700; }
+        .report-stat-card .label { font-size: 13px; color: #65676b; margin-top: 4px; }
 
         @media (max-width: 768px) {
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
             .filters { flex-direction: column; }
             .detail-info { grid-template-columns: 1fr; }
             .dashboard-grid { grid-template-columns: 1fr; }
+            .report-stats { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
 <body>
 <div id="app">
-    <header class="header">
-        <h1>Facebook帖子监控系统</h1>
-        <div class="header-actions">
-            <button class="btn btn-start" v-if="!status.running" @click="startMonitor">启动监控</button>
-            <button class="btn btn-stop" v-else @click="stopMonitor">停止监控</button>
-            <button class="btn btn-secondary" @click="refreshData">刷新数据</button>
-        </div>
-    </header>
-
-    <div class="container">
-        <!-- 状态栏 -->
-        <div class="status-bar">
-            <div class="status-item">
-                <span class="status-label">监控状态</span>
-                <span class="status-value">
-                    <span class="status-dot" :class="status.running ? 'running' : 'stopped'"></span>
-                    {{ status.running ? '运行中' : '已停止' }}
-                </span>
+    <!-- 登录页面 -->
+    <div v-if="!isLoggedIn" class="login-wrapper">
+        <div class="login-card">
+            <h2>Facebook监控系统</h2>
+            <p>请登录以继续</p>
+            <div class="form-group">
+                <label>用户名</label>
+                <input v-model="loginForm.username" placeholder="请输入用户名" @keyup.enter="doLogin" />
             </div>
-            <div class="status-item">
-                <span class="status-label">发送状态</span>
-                <span class="status-value">
-                    <span class="status-dot" :class="sendingStatus.running ? 'running' : 'stopped'"></span>
-                    {{ sendingStatus.running ? '运行中' : '已停止' }}
-                </span>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" v-model="loginForm.password" placeholder="请输入密码" @keyup.enter="doLogin" />
             </div>
-            <div class="status-item" v-if="status.running">
-                <span class="status-label">当前页面</span>
-                <span class="status-value">{{ status.current_page_label || '-' }}</span>
-            </div>
-            <div class="status-item" v-if="status.running">
-                <span class="status-label">轮次</span>
-                <span class="status-value">{{ status.round_count }}</span>
-            </div>
-            <div class="status-item" v-if="status.error">
-                <span class="status-label">错误</span>
-                <span class="status-value" style="color:#fa3e3e; font-size:13px;">{{ status.error }}</span>
-            </div>
-        </div>
-
-        <!-- 统计卡片 -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number">{{ stats.total_posts || 0 }}</div>
-                <div class="stat-label">总帖子数</div>
-            </div>
-            <div class="stat-card target">
-                <div class="stat-number">{{ stats.target_posts || 0 }}</div>
-                <div class="stat-label">目标客户</div>
-            </div>
-            <div class="stat-card non-target">
-                <div class="stat-number">{{ stats.non_target_posts || 0 }}</div>
-                <div class="stat-label">非目标客户</div>
-            </div>
-            <div class="stat-card liked">
-                <div class="stat-number">{{ stats.liked_posts || 0 }}</div>
-                <div class="stat-label">已点赞</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{{ stats.interested_posts || 0 }}</div>
-                <div class="stat-label">已标记有兴趣</div>
-            </div>
-        </div>
-
-        <!-- 标签页 -->
-        <div class="tabs">
-            <div class="tab" :class="{ active: activeTab === 'posts' }" @click="activeTab = 'posts'">帖子列表</div>
-            <div class="tab" :class="{ active: activeTab === 'accounts' }" @click="activeTab = 'accounts'; loadAccounts()">账号管理</div>
-            <div class="tab" :class="{ active: activeTab === 'whatsapp' }" @click="activeTab = 'whatsapp'; loadWhatsApp()">WhatsApp</div>
-            <div class="tab" :class="{ active: activeTab === 'sending' }" @click="activeTab = 'sending'; loadSendingStatus()">发送控制</div>
-            <div class="tab" :class="{ active: activeTab === 'dashboard' }" @click="activeTab = 'dashboard'; loadDashboard()">统计面板</div>
-            <div class="tab" :class="{ active: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">监控日志</div>
-        </div>
-
-        <!-- ====== 帖子列表 ====== -->
-        <div v-if="activeTab === 'posts'">
-            <div class="filters">
-                <select class="filter-select" v-model="filters.source" @change="loadPosts(1)">
-                    <option value="">全部来源</option>
-                    <option value="home">首页动态</option>
-                    <option value="groups">小组动态</option>
-                    <option value="search">搜索帖子</option>
-                </select>
-                <select class="filter-select" v-model="filters.is_target" @change="loadPosts(1)">
-                    <option value="">全部类型</option>
-                    <option value="true">目标客户</option>
-                    <option value="false">非目标客户</option>
-                </select>
-                <input class="filter-input" v-model="filters.search" placeholder="搜索帖子内容..." @keyup.enter="loadPosts(1)" />
-                <button class="btn btn-primary" @click="loadPosts(1)">搜索</button>
-            </div>
-
-            <div class="post-list">
-                <div class="post-card" v-for="post in posts" :key="post.id" @click="openPostDetail(post)">
-                    <div class="post-header">
-                        <div>
-                            <div class="post-author">
-                                <a v-if="post.author_profile_url" :href="post.author_profile_url" target="_blank" @click.stop>{{ post.author_name || '未知用户' }}</a>
-                                <span v-else>{{ post.author_name || '未知用户' }}</span>
-                            </div>
-                            <div class="post-meta">
-                                <span v-if="post.post_time">{{ post.post_time }}</span>
-                                <span>{{ formatDate(post.created_at) }}</span>
-                                <span v-if="post.author_id">ID: {{ post.author_id }}</span>
-                            </div>
-                        </div>
-                        <div class="post-badges">
-                            <span class="badge badge-source">{{ sourceLabel(post.source_page) }}</span>
-                            <span class="badge" :class="post.is_target ? 'badge-target' : 'badge-non-target'">{{ post.is_target ? '目标客户' : '非目标' }}</span>
-                            <span class="badge badge-discovered" v-if="post.discovered_by">{{ post.discovered_by }}</span>
-                            <span class="badge badge-liked" v-if="post.action_liked">已点赞</span>
-                            <span class="badge badge-interested" v-if="post.action_interested">有兴趣</span>
-                            <span class="badge badge-not-interested" v-if="post.action_not_interested">没兴趣</span>
-                        </div>
-                    </div>
-                    <div class="post-content">{{ post.content }}</div>
-                    <div class="post-actions-bar">
-                        <a v-if="post.post_url" :href="post.post_url" target="_blank" class="post-link" @click.stop>查看原帖</a>
-                        <span style="font-size:12px; color:#65676b;">帖子ID: {{ post.post_id }}</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="empty-state" v-if="posts.length === 0 && !loading">
-                <h3>暂无帖子数据</h3>
-                <p>启动监控后，帖子会自动出现在这里</p>
-            </div>
-
-            <div class="pagination" v-if="totalPages > 1">
-                <button class="btn" :disabled="currentPage <= 1" @click="loadPosts(currentPage - 1)">上一页</button>
-                <template v-for="p in visiblePages" :key="p">
-                    <button class="btn" :class="{ active: p === currentPage }" @click="loadPosts(p)">{{ p }}</button>
-                </template>
-                <button class="btn" :disabled="currentPage >= totalPages" @click="loadPosts(currentPage + 1)">下一页</button>
-                <span class="page-info">共 {{ totalPosts }} 条</span>
-            </div>
-        </div>
-
-        <!-- ====== 账号管理 ====== -->
-        <div v-if="activeTab === 'accounts'">
-            <div class="mgmt-card">
-                <h3>添加账号</h3>
-                <div class="form-row">
-                    <input v-model="newAccount.name" placeholder="账号名称/邮箱" />
-                    <select v-model="newAccount.account_type" style="min-width:120px;">
-                        <option value="monitor">监控账号</option>
-                        <option value="sender">发送账号</option>
-                    </select>
-                    <input v-model="newAccount.cookie_url" placeholder="Cookie JSON URL" />
-                    <button class="btn btn-primary" @click="createAccount">添加</button>
-                </div>
-            </div>
-
-            <div class="mgmt-card">
-                <h3>账号列表 ({{ accounts.length }})</h3>
-                <table class="mgmt-table">
-                    <thead>
-                        <tr><th>名称</th><th>类型</th><th>Cookie状态</th><th>账号状态</th><th>关联WhatsApp</th><th>启用</th><th>操作</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="acc in accounts" :key="acc.id">
-                            <td>{{ acc.name }}</td>
-                            <td><span class="badge" :class="acc.account_type === 'monitor' ? 'badge-source' : 'badge-target'">{{ acc.account_type === 'monitor' ? '监控' : '发送' }}</span></td>
-                            <td><span :style="{ color: acc.cookie_status === 'valid' ? '#42b72a' : '#fa3e3e' }">{{ acc.cookie_status }}</span></td>
-                            <td>{{ acc.status }}</td>
-                            <td>
-                                <select v-if="acc.account_type === 'sender'" :value="acc.whatsapp_account_id || ''" @change="updateAccountWhatsApp(acc, $event.target.value)" style="padding:4px 8px; font-size:12px; border:1px solid #ddd; border-radius:4px;">
-                                    <option value="">无</option>
-                                    <option v-for="wa in whatsappAccounts" :key="wa.id" :value="wa.id">{{ wa.phone_number }}</option>
-                                </select>
-                                <span v-else style="color:#65676b;">-</span>
-                            </td>
-                            <td><div class="toggle" :class="{ on: acc.enabled }" @click="toggleAccount(acc)"></div></td>
-                            <td>
-                                <button class="btn btn-sm btn-primary" @click="refreshCookie(acc.id)" style="margin-right:4px;">刷新Cookie</button>
-                                <button class="btn btn-sm btn-danger" @click="deleteAccount(acc.id)">删除</button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div v-if="accounts.length === 0" class="empty-state" style="padding:30px;">
-                    <p>暂无账号，请先添加</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- ====== WhatsApp管理 ====== -->
-        <div v-if="activeTab === 'whatsapp'">
-            <div class="mgmt-card">
-                <h3>添加WhatsApp账号</h3>
-                <div class="form-row">
-                    <input v-model="newWhatsApp.phone_number" placeholder="WhatsApp号码 (如 +8613800138000)" />
-                    <button class="btn btn-primary" @click="createWhatsApp">添加</button>
-                </div>
-            </div>
-
-            <div class="mgmt-card">
-                <h3>WhatsApp账号列表 ({{ whatsappAccounts.length }})</h3>
-                <table class="mgmt-table">
-                    <thead>
-                        <tr><th>号码</th><th>关联发送账号</th><th>使用次数</th><th>启用</th><th>创建时间</th><th>操作</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="wa in whatsappAccounts" :key="wa.id">
-                            <td>{{ wa.phone_number }}</td>
-                            <td>
-                                <span v-if="getLinkedAccounts(wa.id).length > 0">
-                                    <span v-for="(acc, idx) in getLinkedAccounts(wa.id)" :key="acc.id" class="badge badge-target" style="margin-right:4px;">{{ acc.name }}</span>
-                                </span>
-                                <span v-else style="color:#65676b; font-size:12px;">未关联</span>
-                            </td>
-                            <td>{{ wa.usage_count }}</td>
-                            <td><div class="toggle" :class="{ on: wa.enabled }" @click="toggleWhatsApp(wa)"></div></td>
-                            <td>{{ formatDate(wa.created_at) }}</td>
-                            <td><button class="btn btn-sm btn-danger" @click="deleteWhatsApp(wa.id)">删除</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div v-if="whatsappAccounts.length === 0" class="empty-state" style="padding:30px;">
-                    <p>暂无WhatsApp账号</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- ====== 发送控制 ====== -->
-        <div v-if="activeTab === 'sending'">
-            <div class="mgmt-card">
-                <h3>
-                    发送控制
-                    <div>
-                        <button class="btn btn-start" v-if="!sendingStatus.running" @click="startSending">启动发送</button>
-                        <button class="btn btn-stop" v-else @click="stopSending">停止发送</button>
-                    </div>
-                </h3>
-                <div v-if="sendingStatus.accounts && Object.keys(sendingStatus.accounts).length > 0">
-                    <table class="mgmt-table">
-                        <thead>
-                            <tr><th>账号</th><th>当前任务</th><th>状态</th><th>最后更新</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="(info, id) in sendingStatus.accounts" :key="id">
-                                <td>{{ info.account_name }}</td>
-                                <td>{{ info.current_task || '空闲' }}</td>
-                                <td>
-                                    <span :style="{ color: info.status === 'executing' ? '#1877f2' : info.status === 'idle' ? '#42b72a' : '#fa3e3e' }">
-                                        {{ info.status === 'executing' ? '执行中' : info.status === 'idle' ? '空闲' : info.status }}
-                                    </span>
-                                </td>
-                                <td>{{ formatDate(info.last_update) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div v-else class="empty-state" style="padding:30px;">
-                    <p>{{ sendingStatus.running ? '等待任务中...' : '发送未启动' }}</p>
-                </div>
-            </div>
-
-            <div class="mgmt-card" v-if="dashboardData.task_queue">
-                <h3>任务队列</h3>
-                <div class="stats-grid" style="margin-bottom:0;">
-                    <div class="stat-card">
-                        <div class="stat-number" style="font-size:24px;">{{ dashboardData.task_queue.pending }}</div>
-                        <div class="stat-label">待执行</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" style="font-size:24px; color:#1877f2;">{{ dashboardData.task_queue.in_progress }}</div>
-                        <div class="stat-label">执行中</div>
-                    </div>
-                    <div class="stat-card target">
-                        <div class="stat-number" style="font-size:24px;">{{ dashboardData.task_queue.completed_today }}</div>
-                        <div class="stat-label">今日完成</div>
-                    </div>
-                    <div class="stat-card non-target">
-                        <div class="stat-number" style="font-size:24px;">{{ dashboardData.task_queue.failed_today }}</div>
-                        <div class="stat-label">今日失败</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 发送详情 -->
-            <div class="mgmt-card">
-                <h3>
-                    发送详情
-                    <button class="btn btn-sm btn-primary" @click="loadSendingTasks()">刷新</button>
-                </h3>
-                <div class="filters" style="box-shadow:none; padding:8px 0;">
-                    <select class="filter-select" v-model="sendingTaskFilters.status" @change="loadSendingTasks()">
-                        <option value="">全部状态</option>
-                        <option value="completed">已完成</option>
-                        <option value="failed">失败</option>
-                        <option value="pending">待执行</option>
-                        <option value="in_progress">执行中</option>
-                        <option value="skipped">已跳过</option>
-                    </select>
-                    <select class="filter-select" v-model="sendingTaskFilters.task_type" @change="loadSendingTasks()">
-                        <option value="">全部类型</option>
-                        <option value="comment">评论</option>
-                        <option value="dm">私信</option>
-                        <option value="add_friend">加好友</option>
-                    </select>
-                </div>
-                <div style="overflow-x:auto;">
-                    <table class="mgmt-table" v-if="sendingTasks.length > 0">
-                        <thead>
-                            <tr><th>账号</th><th>类型</th><th>状态</th><th>帖子链接</th><th>用户主页</th><th>生成内容</th><th>错误信息</th><th>时间</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="task in sendingTasks" :key="task.id">
-                                <td>{{ task.account_name }}</td>
-                                <td>{{ taskTypeLabel(task.task_type) }}</td>
-                                <td :class="'action-status-' + task.status">{{ task.status }}</td>
-                                <td><a v-if="task.post_url" :href="task.post_url" target="_blank" class="post-link" style="font-size:12px;">查看帖子</a><span v-else>-</span></td>
-                                <td>
-                                    <a v-if="task.author_id" :href="'https://www.facebook.com/' + task.author_id" target="_blank" class="post-link" style="font-size:12px;">
-                                        {{ task.author_name || task.author_id }}
-                                    </a>
-                                    <span v-else>-</span>
-                                </td>
-                                <td style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" :title="task.generated_text || ''">{{ task.generated_text ? task.generated_text.substring(0, 60) + '...' : '-' }}</td>
-                                <td style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#fa3e3e;" :title="task.error_message || ''">{{ task.error_message || '-' }}</td>
-                                <td style="font-size:12px; white-space:nowrap;">{{ formatDate(task.completed_at || task.created_at) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="pagination" v-if="sendingTasksTotal > 50" style="margin-top:12px;">
-                    <button class="btn btn-sm" :disabled="sendingTasksPage <= 1" @click="loadSendingTasks(sendingTasksPage - 1)">上一页</button>
-                    <span class="page-info">{{ sendingTasksPage }} / {{ Math.ceil(sendingTasksTotal / 50) }} (共 {{ sendingTasksTotal }} 条)</span>
-                    <button class="btn btn-sm" :disabled="sendingTasksPage >= Math.ceil(sendingTasksTotal / 50)" @click="loadSendingTasks(sendingTasksPage + 1)">下一页</button>
-                </div>
-                <div v-if="sendingTasks.length === 0" class="empty-state" style="padding:30px;">
-                    <p>暂无发送记录</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- ====== 统计面板 ====== -->
-        <div v-if="activeTab === 'dashboard'">
-            <!-- 发送账号统计 -->
-            <div class="mgmt-card" v-if="dashboardData.sender_accounts && dashboardData.sender_accounts.length > 0">
-                <h3>发送账号统计</h3>
-                <table class="mgmt-table">
-                    <thead>
-                        <tr><th>账号</th><th>总评论</th><th>总私信</th><th>今日私信</th><th>今日加好友</th><th>WhatsApp</th><th>状态</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="sa in dashboardData.sender_accounts" :key="sa.id">
-                            <td>{{ sa.name }}</td>
-                            <td style="color:#1877f2; font-weight:600;">{{ sa.total_comments }}</td>
-                            <td style="color:#42b72a; font-weight:600;">{{ sa.total_dms }}</td>
-                            <td>{{ sa.daily_dms }}</td>
-                            <td>{{ sa.daily_friend_requests }}</td>
-                            <td>{{ sa.whatsapp_phone || '-' }}</td>
-                            <td><span :style="{ color: sa.status === 'active' ? '#42b72a' : '#fa3e3e' }">{{ sa.status }}</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- 监控账号统计 -->
-            <div class="mgmt-card" v-if="dashboardData.monitor_accounts && dashboardData.monitor_accounts.length > 0">
-                <h3>监控账号统计</h3>
-                <table class="mgmt-table">
-                    <thead>
-                        <tr><th>账号</th><th>目标帖子</th><th>总帖子</th><th>启用</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="ma in dashboardData.monitor_accounts" :key="ma.id">
-                            <td>{{ ma.name }}</td>
-                            <td style="color:#42b72a; font-weight:600;">{{ ma.target_posts_found }}</td>
-                            <td>{{ ma.total_posts_found }}</td>
-                            <td><span :style="{ color: ma.enabled ? '#42b72a' : '#fa3e3e' }">{{ ma.enabled ? '是' : '否' }}</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- WhatsApp使用统计 -->
-            <div class="mgmt-card" v-if="dashboardData.whatsapp_accounts && dashboardData.whatsapp_accounts.length > 0">
-                <h3>WhatsApp使用统计</h3>
-                <table class="mgmt-table">
-                    <thead>
-                        <tr><th>号码</th><th>用于私信次数</th><th>启用</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="wa in dashboardData.whatsapp_accounts" :key="wa.id">
-                            <td>{{ wa.phone_number }}</td>
-                            <td style="color:#1877f2; font-weight:600;">{{ wa.usage_count }}</td>
-                            <td><span :style="{ color: wa.enabled ? '#42b72a' : '#fa3e3e' }">{{ wa.enabled ? '是' : '否' }}</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="empty-state" v-if="!dashboardData.sender_accounts || dashboardData.sender_accounts.length === 0">
-                <h3>暂无统计数据</h3>
-                <p>添加账号并启动发送后，统计数据将显示在这里</p>
-            </div>
-        </div>
-
-        <!-- ====== 监控日志 ====== -->
-        <div v-if="activeTab === 'logs'">
-            <div style="background:white; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
-                <div class="log-list">
-                    <div class="log-item" v-for="log in logs" :key="log.id">
-                        <span class="log-page-type" :style="{ color: sourceColor(log.page_type) }">{{ sourceLabel(log.page_type) }}</span>
-                        <span v-if="log.account_name" class="badge badge-discovered">{{ log.account_name }}</span>
-                        <span>扫描: {{ log.posts_scanned }}</span>
-                        <span style="color:#42b72a;">新增: {{ log.posts_new }}</span>
-                        <span style="color:#65676b; font-size:12px;">{{ formatDate(log.started_at) }}</span>
-                        <span v-if="log.finished_at" style="color:#65676b; font-size:12px;">~{{ formatDate(log.finished_at) }}</span>
-                    </div>
-                </div>
-                <div class="empty-state" v-if="logs.length === 0" style="padding:40px;">
-                    <h3>暂无监控日志</h3>
-                </div>
-            </div>
+            <button class="btn btn-primary" @click="doLogin">登录</button>
+            <div class="login-error" v-if="loginError">{{ loginError }}</div>
         </div>
     </div>
 
-    <!-- 帖子详情模态框 -->
-    <div class="modal-overlay" v-if="selectedPost" @click.self="selectedPost = null">
-        <div class="modal">
-            <div class="modal-header">
-                <h2>帖子详情</h2>
-                <button class="modal-close" @click="selectedPost = null">&times;</button>
+    <!-- 主界面 -->
+    <div v-else>
+        <header class="header">
+            <h1>Facebook帖子监控系统</h1>
+            <div class="header-actions">
+                <span class="header-user">{{ currentUser.username }} ({{ roleLabel(currentUser.role) }})</span>
+                <button class="btn btn-start" v-if="!status.running" @click="startMonitor">启动监控</button>
+                <button class="btn btn-stop" v-else @click="stopMonitor">停止监控</button>
+                <button class="btn btn-secondary" @click="refreshData">刷新</button>
+                <button class="btn btn-secondary" @click="doLogout">退出</button>
             </div>
-            <div class="modal-body">
-                <div class="detail-section">
-                    <h3>基本信息</h3>
-                    <dl class="detail-info">
-                        <dt>帖子ID</dt><dd>{{ selectedPost.post_id }}</dd>
-                        <dt>作者</dt><dd>{{ selectedPost.author_name || '未知' }}</dd>
-                        <dt>作者ID</dt><dd>{{ selectedPost.author_id || '未知' }}</dd>
-                        <dt>作者主页</dt><dd><a v-if="selectedPost.author_profile_url" :href="selectedPost.author_profile_url" target="_blank">{{ selectedPost.author_profile_url }}</a><span v-else>-</span></dd>
-                        <dt>帖子时间</dt><dd>{{ selectedPost.post_time || '未知' }}</dd>
-                        <dt>来源页面</dt><dd>{{ sourceLabel(selectedPost.source_page) }}</dd>
-                        <dt>发现者</dt><dd>{{ selectedPost.discovered_by || '默认' }}</dd>
-                        <dt>采集时间</dt><dd>{{ formatDate(selectedPost.created_at) }}</dd>
-                        <dt>帖子链接</dt><dd><a v-if="selectedPost.post_url" :href="selectedPost.post_url" target="_blank">查看原帖</a><span v-else>-</span></dd>
-                    </dl>
+        </header>
+
+        <div class="container">
+            <!-- 状态栏 -->
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">监控状态</span>
+                    <span class="status-value">
+                        <span class="status-dot" :class="status.running ? 'running' : 'stopped'"></span>
+                        {{ status.running ? '运行中' : '已停止' }}
+                    </span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">发送状态</span>
+                    <span class="status-value">
+                        <span class="status-dot" :class="sendingStatus.running ? 'running' : 'stopped'"></span>
+                        {{ sendingStatus.running ? '运行中' : '已停止' }}
+                    </span>
+                </div>
+                <div class="status-item" v-if="status.running">
+                    <span class="status-label">当前页面</span>
+                    <span class="status-value">{{ status.current_page_label || '-' }}</span>
+                </div>
+                <div class="status-item" v-if="status.running">
+                    <span class="status-label">轮次</span>
+                    <span class="status-value">{{ status.round_count }}</span>
+                </div>
+            </div>
+
+            <!-- 统计卡片 -->
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-number">{{ stats.total_posts || 0 }}</div><div class="stat-label">总帖子数</div></div>
+                <div class="stat-card target"><div class="stat-number">{{ stats.target_posts || 0 }}</div><div class="stat-label">目标客户</div></div>
+                <div class="stat-card non-target"><div class="stat-number">{{ stats.non_target_posts || 0 }}</div><div class="stat-label">非目标客户</div></div>
+                <div class="stat-card liked"><div class="stat-number">{{ stats.liked_posts || 0 }}</div><div class="stat-label">已点赞</div></div>
+                <div class="stat-card"><div class="stat-number">{{ stats.interested_posts || 0 }}</div><div class="stat-label">已标记有兴趣</div></div>
+            </div>
+
+            <!-- 标签页 -->
+            <div class="tabs">
+                <div class="tab" :class="{ active: activeTab === 'posts' }" @click="activeTab = 'posts'">帖子列表</div>
+                <div class="tab" :class="{ active: activeTab === 'accounts' }" @click="activeTab = 'accounts'; loadAccounts()">账号管理</div>
+                <div class="tab" :class="{ active: activeTab === 'whatsapp' }" @click="activeTab = 'whatsapp'; loadWhatsApp()">WhatsApp</div>
+                <div class="tab" :class="{ active: activeTab === 'sending' }" @click="activeTab = 'sending'; loadSendingStatus()">发送控制</div>
+                <div class="tab" :class="{ active: activeTab === 'report' }" @click="activeTab = 'report'; loadReport()">统计报表</div>
+                <div class="tab" :class="{ active: activeTab === 'dashboard' }" @click="activeTab = 'dashboard'; loadDashboard()">统计面板</div>
+                <div class="tab" v-if="currentUser.role !== 'employee'" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'; loadUsers()">用户管理</div>
+                <div class="tab" :class="{ active: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">监控日志</div>
+            </div>
+
+            <!-- ====== 帖子列表 ====== -->
+            <div v-if="activeTab === 'posts'">
+                <div class="filters">
+                    <select class="filter-select" v-model="filters.source" @change="loadPosts(1)">
+                        <option value="">全部来源</option>
+                        <option value="home">首页动态</option>
+                        <option value="groups">小组动态</option>
+                        <option value="search">搜索帖子</option>
+                    </select>
+                    <select class="filter-select" v-model="filters.is_target" @change="loadPosts(1)">
+                        <option value="">全部类型</option>
+                        <option value="true">目标客户</option>
+                        <option value="false">非目标客户</option>
+                    </select>
+                    <input class="filter-input" v-model="filters.search" placeholder="搜索帖子内容..." @keyup.enter="loadPosts(1)" />
+                    <button class="btn btn-primary" @click="loadPosts(1)">搜索</button>
                 </div>
 
-                <div class="detail-section">
-                    <h3>AI判定</h3>
-                    <div style="margin-bottom:8px;">
+                <div class="post-list">
+                    <div class="post-card" v-for="post in posts" :key="post.id">
+                        <div class="post-header">
+                            <div>
+                                <div class="post-author">
+                                    <a v-if="post.author_profile_url" :href="post.author_profile_url" target="_blank">{{ post.author_name || '未知用户' }}</a>
+                                    <span v-else>{{ post.author_name || '未知用户' }}</span>
+                                </div>
+                                <div class="post-meta">
+                                    <span v-if="post.post_time">{{ post.post_time }}</span>
+                                    <span>{{ formatDate(post.created_at) }}</span>
+                                    <span v-if="post.author_id">ID: {{ post.author_id }}</span>
+                                </div>
+                            </div>
+                            <div class="post-badges">
+                                <span class="badge badge-source">{{ sourceLabel(post.source_page) }}</span>
+                                <span class="badge" :class="post.is_target ? 'badge-target' : 'badge-non-target'">{{ post.is_target ? '目标客户' : '非目标' }}</span>
+                                <span class="badge badge-discovered" v-if="post.discovered_by">{{ post.discovered_by }}</span>
+                                <span class="badge badge-liked" v-if="post.action_liked">已点赞</span>
+                                <span class="badge badge-interested" v-if="post.action_interested">有兴趣</span>
+                            </div>
+                        </div>
+
+                        <!-- 帖子原文 - 直接展示 -->
+                        <div class="post-content-area">
+                            <div class="post-content-block">
+                                <div class="post-content-label">原文</div>
+                                <div class="post-content-text">{{ post.content }}</div>
+                            </div>
+                            <div class="post-content-block" v-if="post.content_zh">
+                                <div class="post-content-label">中文翻译</div>
+                                <div class="post-content-zh">{{ post.content_zh }}</div>
+                            </div>
+                            <div class="post-content-block" v-else-if="post.content">
+                                <button class="translate-btn" @click.stop="translatePost(post)">点击翻译为中文</button>
+                            </div>
+                        </div>
+
+                        <!-- 帖子链接 -->
+                        <div class="post-actions-bar">
+                            <a v-if="post.post_url" :href="post.post_url" target="_blank" class="post-link">查看原帖</a>
+                            <span style="font-size:12px; color:#65676b;">帖子ID: {{ post.post_id }}</span>
+                            <span style="font-size:12px; color:#65676b; cursor:pointer;" @click="openPostDetail(post)">查看详情</span>
+                        </div>
+
+                        <!-- 反馈按钮 -->
+                        <div class="feedback-bar">
+                            <button class="feedback-btn" :class="{ 'active-target': post.my_feedback && post.my_feedback.is_target_manual }" @click.stop="toggleFeedback(post, 'is_target_manual')">
+                                {{ post.my_feedback && post.my_feedback.is_target_manual ? '&#10003; 目标客户' : '标记目标客户' }}
+                            </button>
+                            <button class="feedback-btn" :class="{ 'active-contacted': post.my_feedback && post.my_feedback.is_contacted }" @click.stop="toggleFeedback(post, 'is_contacted')">
+                                {{ post.my_feedback && post.my_feedback.is_contacted ? '&#10003; 已联系' : '标记已联系' }}
+                            </button>
+                            <div class="feedback-whatsapp-input" v-if="post._showWhatsAppInput">
+                                <input v-model="post._whatsappInput" placeholder="输入WhatsApp账号" @keyup.enter="submitWhatsApp(post)" @click.stop />
+                                <button class="btn btn-sm btn-success" @click.stop="submitWhatsApp(post)">保存</button>
+                                <button class="btn btn-sm" @click.stop="post._showWhatsAppInput = false" style="background:#eee;">取消</button>
+                            </div>
+                            <button v-else class="feedback-btn" :class="{ 'active-whatsapp': post.my_feedback && post.my_feedback.whatsapp_number }" @click.stop="showWhatsAppInput(post)">
+                                {{ post.my_feedback && post.my_feedback.whatsapp_number ? 'WhatsApp: ' + post.my_feedback.whatsapp_number : '录入WhatsApp' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="empty-state" v-if="posts.length === 0 && !loading">
+                    <h3>暂无帖子数据</h3>
+                    <p>启动监控后，帖子会自动出现在这里</p>
+                </div>
+
+                <div class="pagination" v-if="totalPages > 1">
+                    <button class="btn" :disabled="currentPage <= 1" @click="loadPosts(currentPage - 1)">上一页</button>
+                    <template v-for="p in visiblePages" :key="p">
+                        <button class="btn" :class="{ active: p === currentPage }" @click="loadPosts(p)">{{ p }}</button>
+                    </template>
+                    <button class="btn" :disabled="currentPage >= totalPages" @click="loadPosts(currentPage + 1)">下一页</button>
+                    <span class="page-info">共 {{ totalPosts }} 条</span>
+                </div>
+            </div>
+
+            <!-- ====== 账号管理 ====== -->
+            <div v-if="activeTab === 'accounts'">
+                <div class="mgmt-card">
+                    <h3>添加账号</h3>
+                    <div class="form-row">
+                        <input v-model="newAccount.name" placeholder="账号名称/邮箱" />
+                        <select v-model="newAccount.account_type" style="min-width:120px;">
+                            <option value="monitor">监控账号</option>
+                            <option value="sender">发送账号</option>
+                        </select>
+                        <input v-model="newAccount.cookie_url" placeholder="Cookie JSON URL" />
+                        <button class="btn btn-primary" @click="createAccount">添加</button>
+                    </div>
+                </div>
+                <div class="mgmt-card">
+                    <h3>账号列表 ({{ accounts.length }})</h3>
+                    <table class="mgmt-table">
+                        <thead>
+                            <tr><th>名称</th><th>类型</th><th>Cookie状态</th><th>账号状态</th><th>所属用户</th><th>关联WhatsApp</th><th>启用</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="acc in accounts" :key="acc.id">
+                                <td>{{ acc.name }}</td>
+                                <td><span class="badge" :class="acc.account_type === 'monitor' ? 'badge-source' : 'badge-target'">{{ acc.account_type === 'monitor' ? '监控' : '发送' }}</span></td>
+                                <td><span :style="{ color: acc.cookie_status === 'valid' ? '#42b72a' : '#fa3e3e' }">{{ acc.cookie_status }}</span></td>
+                                <td>{{ acc.status }}</td>
+                                <td>{{ acc.owner_name || '-' }}</td>
+                                <td>
+                                    <select v-if="acc.account_type === 'sender'" :value="acc.whatsapp_account_id || ''" @change="updateAccountWhatsApp(acc, $event.target.value)" style="padding:4px 8px; font-size:12px; border:1px solid #ddd; border-radius:4px;">
+                                        <option value="">无</option>
+                                        <option v-for="wa in whatsappAccounts" :key="wa.id" :value="wa.id">{{ wa.phone_number }}</option>
+                                    </select>
+                                    <span v-else style="color:#65676b;">-</span>
+                                </td>
+                                <td><div class="toggle" :class="{ on: acc.enabled }" @click="toggleAccount(acc)"></div></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" @click="refreshCookie(acc.id)" style="margin-right:4px;">刷新Cookie</button>
+                                    <button class="btn btn-sm btn-danger" @click="deleteAccount(acc.id)">删除</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="accounts.length === 0" class="empty-state" style="padding:30px;"><p>暂无账号，请先添加</p></div>
+                </div>
+            </div>
+
+            <!-- ====== WhatsApp管理 ====== -->
+            <div v-if="activeTab === 'whatsapp'">
+                <div class="mgmt-card">
+                    <h3>添加WhatsApp账号</h3>
+                    <div class="form-row">
+                        <input v-model="newWhatsApp.phone_number" placeholder="WhatsApp号码 (如 +8613800138000)" />
+                        <button class="btn btn-primary" @click="createWhatsApp">添加</button>
+                    </div>
+                </div>
+                <div class="mgmt-card">
+                    <h3>WhatsApp账号列表 ({{ whatsappAccounts.length }})</h3>
+                    <table class="mgmt-table">
+                        <thead>
+                            <tr><th>号码</th><th>关联发送账号</th><th>使用次数</th><th>启用</th><th>创建时间</th><th>操作</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="wa in whatsappAccounts" :key="wa.id">
+                                <td>{{ wa.phone_number }}</td>
+                                <td>
+                                    <span v-if="getLinkedAccounts(wa.id).length > 0">
+                                        <span v-for="(acc, idx) in getLinkedAccounts(wa.id)" :key="acc.id" class="badge badge-target" style="margin-right:4px;">{{ acc.name }}</span>
+                                    </span>
+                                    <span v-else style="color:#65676b; font-size:12px;">未关联</span>
+                                </td>
+                                <td>{{ wa.usage_count }}</td>
+                                <td><div class="toggle" :class="{ on: wa.enabled }" @click="toggleWhatsApp(wa)"></div></td>
+                                <td>{{ formatDate(wa.created_at) }}</td>
+                                <td><button class="btn btn-sm btn-danger" @click="deleteWhatsApp(wa.id)">删除</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="whatsappAccounts.length === 0" class="empty-state" style="padding:30px;"><p>暂无WhatsApp账号</p></div>
+                </div>
+            </div>
+
+            <!-- ====== 发送控制 ====== -->
+            <div v-if="activeTab === 'sending'">
+                <div class="mgmt-card">
+                    <h3>
+                        发送控制
+                        <div>
+                            <button class="btn btn-start" v-if="!sendingStatus.running" @click="startSending">启动发送</button>
+                            <button class="btn btn-stop" v-else @click="stopSending">停止发送</button>
+                        </div>
+                    </h3>
+                    <div v-if="sendingStatus.accounts && Object.keys(sendingStatus.accounts).length > 0">
+                        <table class="mgmt-table">
+                            <thead><tr><th>账号</th><th>当前任务</th><th>状态</th><th>最后更新</th></tr></thead>
+                            <tbody>
+                                <tr v-for="(info, id) in sendingStatus.accounts" :key="id">
+                                    <td>{{ info.account_name }}</td>
+                                    <td>{{ info.current_task || '空闲' }}</td>
+                                    <td><span :style="{ color: info.status === 'executing' ? '#1877f2' : info.status === 'idle' ? '#42b72a' : '#fa3e3e' }">{{ info.status === 'executing' ? '执行中' : info.status === 'idle' ? '空闲' : info.status }}</span></td>
+                                    <td>{{ formatDate(info.last_update) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-else class="empty-state" style="padding:30px;"><p>{{ sendingStatus.running ? '等待任务中...' : '发送未启动' }}</p></div>
+                </div>
+
+                <!-- 发送详情 -->
+                <div class="mgmt-card">
+                    <h3>发送详情 <button class="btn btn-sm btn-primary" @click="loadSendingTasks()">刷新</button></h3>
+                    <div class="filters" style="box-shadow:none; padding:8px 0;">
+                        <select class="filter-select" v-model="sendingTaskFilters.status" @change="loadSendingTasks()">
+                            <option value="">全部状态</option>
+                            <option value="completed">已完成</option>
+                            <option value="failed">失败</option>
+                            <option value="pending">待执行</option>
+                            <option value="in_progress">执行中</option>
+                        </select>
+                        <select class="filter-select" v-model="sendingTaskFilters.task_type" @change="loadSendingTasks()">
+                            <option value="">全部类型</option>
+                            <option value="comment">评论</option>
+                            <option value="dm">私信</option>
+                            <option value="add_friend">加好友</option>
+                        </select>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="mgmt-table" v-if="sendingTasks.length > 0">
+                            <thead><tr><th>账号</th><th>类型</th><th>状态</th><th>帖子链接</th><th>用户主页</th><th>生成内容</th><th>错误</th><th>时间</th></tr></thead>
+                            <tbody>
+                                <tr v-for="task in sendingTasks" :key="task.id">
+                                    <td>{{ task.account_name }}</td>
+                                    <td>{{ taskTypeLabel(task.task_type) }}</td>
+                                    <td :class="'action-status-' + task.status">{{ task.status }}</td>
+                                    <td><a v-if="task.post_url" :href="task.post_url" target="_blank" class="post-link" style="font-size:12px;">查看帖子</a><span v-else>-</span></td>
+                                    <td><a v-if="task.author_id" :href="'https://www.facebook.com/' + task.author_id" target="_blank" class="post-link" style="font-size:12px;">{{ task.author_name || task.author_id }}</a><span v-else>-</span></td>
+                                    <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" :title="task.generated_text || ''">{{ task.generated_text ? task.generated_text.substring(0, 50) + '...' : '-' }}</td>
+                                    <td style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#fa3e3e;" :title="task.error_message || ''">{{ task.error_message || '-' }}</td>
+                                    <td style="font-size:12px; white-space:nowrap;">{{ formatDate(task.completed_at || task.created_at) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination" v-if="sendingTasksTotal > 50" style="margin-top:12px;">
+                        <button class="btn btn-sm" :disabled="sendingTasksPage <= 1" @click="loadSendingTasks(sendingTasksPage - 1)">上一页</button>
+                        <span class="page-info">{{ sendingTasksPage }} / {{ Math.ceil(sendingTasksTotal / 50) }} (共 {{ sendingTasksTotal }} 条)</span>
+                        <button class="btn btn-sm" :disabled="sendingTasksPage >= Math.ceil(sendingTasksTotal / 50)" @click="loadSendingTasks(sendingTasksPage + 1)">下一页</button>
+                    </div>
+                    <div v-if="sendingTasks.length === 0" class="empty-state" style="padding:30px;"><p>暂无发送记录</p></div>
+                </div>
+            </div>
+
+            <!-- ====== 统计报表 (新增) ====== -->
+            <div v-if="activeTab === 'report'">
+                <div class="mgmt-card">
+                    <h3>统计报表</h3>
+                    <div class="report-filters">
+                        <label>开始日期:</label>
+                        <input type="date" v-model="reportFilters.start_date" />
+                        <label>结束日期:</label>
+                        <input type="date" v-model="reportFilters.end_date" />
+                        <button class="btn btn-primary" @click="loadReport">查询</button>
+                    </div>
+                    <div class="report-stats">
+                        <div class="report-stat-card">
+                            <div class="number" style="color:#1877f2;">{{ reportData.total_posts || 0 }}</div>
+                            <div class="label">抓取帖子总数</div>
+                        </div>
+                        <div class="report-stat-card">
+                            <div class="number" style="color:#42b72a;">{{ reportData.target_posts || 0 }}</div>
+                            <div class="label">AI判定目标客户</div>
+                        </div>
+                        <div class="report-stat-card">
+                            <div class="number" style="color:#f7b928;">{{ reportData.marked_target || 0 }}</div>
+                            <div class="label">手动标记目标客户</div>
+                        </div>
+                        <div class="report-stat-card">
+                            <div class="number" style="color:#1877f2;">{{ reportData.contacted || 0 }}</div>
+                            <div class="label">已联系</div>
+                        </div>
+                        <div class="report-stat-card">
+                            <div class="number" style="color:#25d366;">{{ reportData.got_whatsapp || 0 }}</div>
+                            <div class="label">已获取WhatsApp</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WhatsApp详情 -->
+                <div class="mgmt-card" v-if="reportData.whatsapp_details && reportData.whatsapp_details.length > 0">
+                    <h3>已获取WhatsApp账号详情</h3>
+                    <table class="mgmt-table">
+                        <thead><tr><th>帖子作者</th><th>WhatsApp账号</th><th>操作人</th><th>帖子链接</th><th>时间</th></tr></thead>
+                        <tbody>
+                            <tr v-for="item in reportData.whatsapp_details" :key="item.feedback_id">
+                                <td>{{ item.author_name || '-' }}</td>
+                                <td style="font-weight:600; color:#25d366;">{{ item.whatsapp_number }}</td>
+                                <td>{{ item.username || '-' }}</td>
+                                <td><a v-if="item.post_url" :href="item.post_url" target="_blank" class="post-link">查看帖子</a><span v-else>-</span></td>
+                                <td>{{ formatDate(item.created_at) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ====== 统计面板 ====== -->
+            <div v-if="activeTab === 'dashboard'">
+                <div class="mgmt-card" v-if="dashboardData.sender_accounts && dashboardData.sender_accounts.length > 0">
+                    <h3>发送账号统计</h3>
+                    <table class="mgmt-table">
+                        <thead><tr><th>账号</th><th>总评论</th><th>总私信</th><th>今日私信</th><th>今日加好友</th><th>WhatsApp</th><th>状态</th></tr></thead>
+                        <tbody>
+                            <tr v-for="sa in dashboardData.sender_accounts" :key="sa.id">
+                                <td>{{ sa.name }}</td>
+                                <td style="color:#1877f2; font-weight:600;">{{ sa.total_comments }}</td>
+                                <td style="color:#42b72a; font-weight:600;">{{ sa.total_dms }}</td>
+                                <td>{{ sa.daily_dms }}</td>
+                                <td>{{ sa.daily_friend_requests }}</td>
+                                <td>{{ sa.whatsapp_phone || '-' }}</td>
+                                <td><span :style="{ color: sa.status === 'active' ? '#42b72a' : '#fa3e3e' }">{{ sa.status }}</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mgmt-card" v-if="dashboardData.monitor_accounts && dashboardData.monitor_accounts.length > 0">
+                    <h3>监控账号统计</h3>
+                    <table class="mgmt-table">
+                        <thead><tr><th>账号</th><th>目标帖子</th><th>总帖子</th><th>启用</th></tr></thead>
+                        <tbody>
+                            <tr v-for="ma in dashboardData.monitor_accounts" :key="ma.id">
+                                <td>{{ ma.name }}</td>
+                                <td style="color:#42b72a; font-weight:600;">{{ ma.target_posts_found }}</td>
+                                <td>{{ ma.total_posts_found }}</td>
+                                <td><span :style="{ color: ma.enabled ? '#42b72a' : '#fa3e3e' }">{{ ma.enabled ? '是' : '否' }}</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty-state" v-if="!dashboardData.sender_accounts || dashboardData.sender_accounts.length === 0">
+                    <h3>暂无统计数据</h3>
+                    <p>添加账号并启动发送后，统计数据将显示在这里</p>
+                </div>
+            </div>
+
+            <!-- ====== 用户管理 ====== -->
+            <div v-if="activeTab === 'users'">
+                <div class="mgmt-card">
+                    <h3>创建用户</h3>
+                    <div class="form-row">
+                        <input v-model="newUser.username" placeholder="用户名" />
+                        <input type="password" v-model="newUser.password" placeholder="密码" />
+                        <select v-model="newUser.role" style="min-width:120px;">
+                            <option v-if="currentUser.role === 'admin'" value="manager">销售经理</option>
+                            <option value="employee">员工</option>
+                        </select>
+                        <select v-if="currentUser.role === 'admin' && newUser.role === 'employee'" v-model="newUser.parent_id" style="min-width:150px;">
+                            <option value="">选择所属经理</option>
+                            <option v-for="m in managers" :key="m.id" :value="m.id">{{ m.username }}</option>
+                        </select>
+                        <button class="btn btn-primary" @click="createUser">创建</button>
+                    </div>
+                </div>
+                <div class="mgmt-card">
+                    <h3>用户列表 ({{ users.length }})</h3>
+                    <table class="mgmt-table">
+                        <thead><tr><th>用户名</th><th>角色</th><th>上级</th><th>启用</th><th>创建时间</th><th>操作</th></tr></thead>
+                        <tbody>
+                            <tr v-for="u in users" :key="u.id">
+                                <td>{{ u.username }}</td>
+                                <td><span class="badge" :class="u.role === 'admin' ? 'badge-source' : u.role === 'manager' ? 'badge-target' : 'badge-discovered'">{{ roleLabel(u.role) }}</span></td>
+                                <td>{{ u.parent_name || '-' }}</td>
+                                <td><div class="toggle" :class="{ on: u.enabled }" @click="toggleUser(u)"></div></td>
+                                <td>{{ formatDate(u.created_at) }}</td>
+                                <td>
+                                    <button v-if="u.role !== 'admin'" class="btn btn-sm btn-primary" @click="resetUserPassword(u)" style="margin-right:4px;">重置密码</button>
+                                    <button v-if="u.role !== 'admin' && currentUser.role === 'admin'" class="btn btn-sm btn-danger" @click="deleteUser(u.id)">删除</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="users.length === 0" class="empty-state" style="padding:30px;"><p>暂无用户</p></div>
+                </div>
+            </div>
+
+            <!-- ====== 监控日志 ====== -->
+            <div v-if="activeTab === 'logs'">
+                <div style="background:white; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
+                    <div class="log-list">
+                        <div class="log-item" v-for="log in logs" :key="log.id">
+                            <span class="log-page-type" :style="{ color: sourceColor(log.page_type) }">{{ sourceLabel(log.page_type) }}</span>
+                            <span v-if="log.account_name" class="badge badge-discovered">{{ log.account_name }}</span>
+                            <span>扫描: {{ log.posts_scanned }}</span>
+                            <span style="color:#42b72a;">新增: {{ log.posts_new }}</span>
+                            <span style="color:#65676b; font-size:12px;">{{ formatDate(log.started_at) }}</span>
+                        </div>
+                    </div>
+                    <div class="empty-state" v-if="logs.length === 0" style="padding:40px;"><h3>暂无监控日志</h3></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 帖子详情模态框 -->
+        <div class="modal-overlay" v-if="selectedPost" @click.self="selectedPost = null">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>帖子详情</h2>
+                    <button class="modal-close" @click="selectedPost = null">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="detail-section">
+                        <h3>基本信息</h3>
+                        <dl class="detail-info">
+                            <dt>作者</dt><dd>{{ selectedPost.author_name || '未知' }}</dd>
+                            <dt>作者ID</dt><dd>{{ selectedPost.author_id || '未知' }}</dd>
+                            <dt>帖子时间</dt><dd>{{ selectedPost.post_time || '未知' }}</dd>
+                            <dt>来源页面</dt><dd>{{ sourceLabel(selectedPost.source_page) }}</dd>
+                            <dt>发现者</dt><dd>{{ selectedPost.discovered_by || '默认' }}</dd>
+                            <dt>帖子链接</dt><dd><a v-if="selectedPost.post_url" :href="selectedPost.post_url" target="_blank">查看原帖</a><span v-else>-</span></dd>
+                        </dl>
+                    </div>
+                    <div class="detail-section">
+                        <h3>AI判定</h3>
                         <span class="badge" :class="selectedPost.is_target ? 'badge-target' : 'badge-non-target'" style="font-size:14px; padding:6px 14px;">
                             {{ selectedPost.is_target ? '目标客户' : '非目标客户' }}
                         </span>
                     </div>
-                </div>
-
-                <div class="detail-section">
-                    <h3>帖子内容</h3>
-                    <div class="detail-content">{{ selectedPost.content }}</div>
-                </div>
-
-                <div class="detail-section" v-if="selectedPost.ai_result">
-                    <h3>AI分析详情</h3>
-                    <div class="ai-result">{{ selectedPost.ai_result }}</div>
-                </div>
-
-                <!-- 发送任务状态 -->
-                <div class="detail-section" v-if="selectedPost.send_tasks && selectedPost.send_tasks.length > 0">
-                    <h3>发送任务</h3>
-                    <table class="actions-table">
-                        <thead>
-                            <tr><th>账号</th><th>类型</th><th>状态</th><th>内容</th><th>时间</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="task in selectedPost.send_tasks" :key="task.id">
-                                <td>{{ task.account_name }}</td>
-                                <td>{{ taskTypeLabel(task.task_type) }}</td>
-                                <td :class="'action-status-' + task.status">{{ task.status }}</td>
-                                <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ task.generated_text || task.error_message || '-' }}</td>
-                                <td>{{ formatDate(task.completed_at || task.created_at) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- 操作记录 -->
-                <div class="detail-section" v-if="selectedPost.actions && selectedPost.actions.length > 0">
-                    <h3>操作记录</h3>
-                    <table class="actions-table">
-                        <thead>
-                            <tr><th>账号</th><th>操作类型</th><th>状态</th><th>详情</th><th>时间</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="action in selectedPost.actions" :key="action.id">
-                                <td>{{ action.account_id }}</td>
-                                <td>{{ actionTypeLabel(action.action_type) }}</td>
-                                <td :class="'action-status-' + action.action_status">{{ action.action_status }}</td>
-                                <td>{{ action.action_detail || '-' }}</td>
-                                <td>{{ formatDate(action.created_at) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="detail-section">
+                        <h3>帖子原文</h3>
+                        <div class="detail-content">{{ selectedPost.content }}</div>
+                    </div>
+                    <div class="detail-section" v-if="selectedPost.content_zh">
+                        <h3>中文翻译</h3>
+                        <div class="detail-content" style="border-left:3px solid #1877f2;">{{ selectedPost.content_zh }}</div>
+                    </div>
+                    <div class="detail-section" v-if="selectedPost.ai_result">
+                        <h3>AI分析详情</h3>
+                        <div class="ai-result">{{ selectedPost.ai_result }}</div>
+                    </div>
+                    <div class="detail-section" v-if="selectedPost.send_tasks && selectedPost.send_tasks.length > 0">
+                        <h3>发送任务</h3>
+                        <table class="actions-table">
+                            <thead><tr><th>账号</th><th>类型</th><th>状态</th><th>内容</th><th>时间</th></tr></thead>
+                            <tbody>
+                                <tr v-for="task in selectedPost.send_tasks" :key="task.id">
+                                    <td>{{ task.account_name }}</td>
+                                    <td>{{ taskTypeLabel(task.task_type) }}</td>
+                                    <td :class="'action-status-' + task.status">{{ task.status }}</td>
+                                    <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ task.generated_text || task.error_message || '-' }}</td>
+                                    <td>{{ formatDate(task.completed_at || task.created_at) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -652,11 +720,18 @@
 </div>
 
 <script>
-const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+const { createApp, ref, reactive, computed, onMounted, onUnmounted } = Vue;
 
 createApp({
     setup() {
-        const status = ref({ running: false, current_page: '', current_page_label: '', posts_processed: 0, round_count: 0, last_action: '', error: '' });
+        // 登录状态
+        const isLoggedIn = ref(false);
+        const currentUser = ref({});
+        const loginForm = reactive({ username: '', password: '' });
+        const loginError = ref('');
+
+        // 主界面数据
+        const status = ref({ running: false });
         const stats = ref({});
         const posts = ref([]);
         const logs = ref([]);
@@ -677,7 +752,21 @@ createApp({
         const sendingTasksTotal = ref(0);
         const sendingTasksPage = ref(1);
         const sendingTaskFilters = ref({ status: '', task_type: '' });
+
+        // 用户管理
+        const users = ref([]);
+        const newUser = reactive({ username: '', password: '', role: 'employee', parent_id: '' });
+
+        // 统计报表
+        const reportFilters = reactive({
+            start_date: new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0],
+            end_date: new Date().toISOString().split('T')[0]
+        });
+        const reportData = ref({});
+
         let statusTimer = null;
+
+        const managers = computed(() => users.value.filter(u => u.role === 'manager'));
 
         const visiblePages = computed(() => {
             const pages = [];
@@ -696,6 +785,10 @@ createApp({
         async function fetchAPI(url, options) {
             try {
                 const resp = await fetch(url, options);
+                if (resp.status === 401) {
+                    isLoggedIn.value = false;
+                    return null;
+                }
                 return await resp.json();
             } catch (e) {
                 console.error('API error:', e);
@@ -703,6 +796,51 @@ createApp({
             }
         }
 
+        // 认证
+        async function doLogin() {
+            loginError.value = '';
+            const d = await fetchAPI('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: loginForm.username, password: loginForm.password })
+            });
+            if (d && d.success) {
+                currentUser.value = d.data;
+                isLoggedIn.value = true;
+                initData();
+            } else {
+                loginError.value = d ? d.message : '登录失败，请检查网络';
+            }
+        }
+
+        async function doLogout() {
+            await fetchAPI('/api/auth/logout', { method: 'POST' });
+            isLoggedIn.value = false;
+            currentUser.value = {};
+            if (statusTimer) clearInterval(statusTimer);
+        }
+
+        async function checkAuth() {
+            const d = await fetchAPI('/api/auth/me');
+            if (d && d.success) {
+                currentUser.value = d.data;
+                isLoggedIn.value = true;
+                initData();
+            }
+        }
+
+        function initData() {
+            loadStatus(); loadStats(); loadPosts();
+            statusTimer = setInterval(() => {
+                loadStatus(); loadStats();
+                if (activeTab.value === 'posts') loadPosts(currentPage.value);
+                if (activeTab.value === 'sending') loadSendingStatus();
+                if (activeTab.value === 'logs') loadLogs();
+                if (activeTab.value === 'dashboard') loadDashboard();
+            }, 15000);
+        }
+
+        // 数据加载
         async function loadStatus() { const d = await fetchAPI('/api/status'); if (d) status.value = d; }
         async function loadStats() { const d = await fetchAPI('/api/stats'); if (d && d.success) stats.value = d.data; }
 
@@ -713,8 +851,17 @@ createApp({
             if (filters.value.source) params.set('source', filters.value.source);
             if (filters.value.is_target) params.set('is_target', filters.value.is_target);
             if (filters.value.search) params.set('search', filters.value.search);
-            const d = await fetchAPI(`/api/posts?${params}`);
-            if (d && d.success) { posts.value = d.data; totalPosts.value = d.total; totalPages.value = d.total_pages; }
+            const d = await fetchAPI('/api/posts?' + params);
+            if (d && d.success) {
+                // 为每个帖子添加响应式辅助字段
+                d.data.forEach(p => {
+                    p._showWhatsAppInput = false;
+                    p._whatsappInput = (p.my_feedback && p.my_feedback.whatsapp_number) || '';
+                });
+                posts.value = d.data;
+                totalPosts.value = d.total;
+                totalPages.value = d.total_pages;
+            }
             loading.value = false;
         }
 
@@ -723,14 +870,12 @@ createApp({
         async function loadAccounts() {
             const d = await fetchAPI('/api/accounts');
             if (d && d.success) accounts.value = d.data;
-            // 同时加载WhatsApp用于下拉
             await loadWhatsApp();
         }
 
         async function loadWhatsApp() {
             const d = await fetchAPI('/api/whatsapp-accounts');
             if (d && d.success) whatsappAccounts.value = d.data;
-            // 同时加载账号用于显示关联关系
             if (!accounts.value.length) {
                 const a = await fetchAPI('/api/accounts');
                 if (a && a.success) accounts.value = a.data;
@@ -753,11 +898,8 @@ createApp({
             const params = new URLSearchParams({ page, per_page: 50 });
             if (sendingTaskFilters.value.status) params.set('status', sendingTaskFilters.value.status);
             if (sendingTaskFilters.value.task_type) params.set('task_type', sendingTaskFilters.value.task_type);
-            const d = await fetchAPI(`/api/sending/tasks?${params}`);
-            if (d && d.success) {
-                sendingTasks.value = d.data;
-                sendingTasksTotal.value = d.total;
-            }
+            const d = await fetchAPI('/api/sending/tasks?' + params);
+            if (d && d.success) { sendingTasks.value = d.data; sendingTasksTotal.value = d.total; }
         }
 
         async function loadDashboard() {
@@ -765,28 +907,87 @@ createApp({
             if (d && d.success) dashboardData.value = d.data;
         }
 
+        async function loadReport() {
+            const params = new URLSearchParams();
+            if (reportFilters.start_date) params.set('start_date', reportFilters.start_date);
+            if (reportFilters.end_date) params.set('end_date', reportFilters.end_date);
+            const d = await fetchAPI('/api/stats/report?' + params);
+            if (d && d.success) reportData.value = d.data;
+        }
+
+        // 用户管理
+        async function loadUsers() {
+            const d = await fetchAPI('/api/users');
+            if (d && d.success) users.value = d.data;
+        }
+
+        async function createUser() {
+            if (!newUser.username || !newUser.password) { alert('请填写用户名和密码'); return; }
+            const body = { username: newUser.username, password: newUser.password, role: newUser.role };
+            if (newUser.parent_id) body.parent_id = parseInt(newUser.parent_id);
+            const d = await fetchAPI('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (d && d.success) {
+                alert(d.message);
+                newUser.username = ''; newUser.password = ''; newUser.parent_id = '';
+                loadUsers();
+            } else {
+                alert(d ? d.message : '创建失败');
+            }
+        }
+
+        async function toggleUser(u) {
+            const d = await fetchAPI('/api/users/' + u.id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: !u.enabled })
+            });
+            if (d && d.success) loadUsers();
+        }
+
+        async function resetUserPassword(u) {
+            const pwd = prompt('请输入新密码:');
+            if (!pwd) return;
+            const d = await fetchAPI('/api/users/' + u.id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pwd })
+            });
+            if (d && d.success) alert('密码已重置');
+            else alert(d ? d.message : '重置失败');
+        }
+
+        async function deleteUser(uid) {
+            if (!confirm('确定要删除这个用户吗？')) return;
+            const d = await fetchAPI('/api/users/' + uid, { method: 'DELETE' });
+            if (d && d.success) loadUsers();
+            else alert(d ? d.message : '删除失败');
+        }
+
+        // 监控
         async function startMonitor() {
             const d = await fetchAPI('/api/start', { method: 'POST' });
             if (d) { alert(d.message); loadStatus(); }
         }
-
         async function stopMonitor() {
             if (!confirm('确定要停止监控吗？')) return;
             const d = await fetchAPI('/api/stop', { method: 'POST' });
             if (d) { alert(d.message); loadStatus(); }
         }
-
         async function startSending() {
             const d = await fetchAPI('/api/sending/start', { method: 'POST' });
             if (d) { alert(d.message); loadSendingStatus(); }
         }
-
         async function stopSending() {
             if (!confirm('确定要停止发送吗？')) return;
             const d = await fetchAPI('/api/sending/stop', { method: 'POST' });
             if (d) { alert(d.message); loadSendingStatus(); }
         }
 
+        // 账号管理
         async function createAccount() {
             if (!newAccount.value.name || !newAccount.value.cookie_url) { alert('请填写账号名称和Cookie URL'); return; }
             const d = await fetchAPI('/api/accounts', {
@@ -798,42 +999,37 @@ createApp({
                 alert(d.message);
                 newAccount.value = { name: '', account_type: 'monitor', cookie_url: '' };
                 loadAccounts();
-            } else {
-                alert(d ? d.message : '创建失败');
-            }
+            } else { alert(d ? d.message : '创建失败'); }
         }
-
         async function deleteAccount(id) {
             if (!confirm('确定要删除这个账号吗？')) return;
-            const d = await fetchAPI(`/api/accounts/${id}`, { method: 'DELETE' });
+            const d = await fetchAPI('/api/accounts/' + id, { method: 'DELETE' });
             if (d && d.success) loadAccounts();
             else alert(d ? d.message : '删除失败');
         }
-
         async function toggleAccount(acc) {
-            const d = await fetchAPI(`/api/accounts/${acc.id}`, {
+            const d = await fetchAPI('/api/accounts/' + acc.id, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: !acc.enabled })
             });
             if (d && d.success) loadAccounts();
         }
-
         async function updateAccountWhatsApp(acc, waId) {
-            const d = await fetchAPI(`/api/accounts/${acc.id}`, {
+            const d = await fetchAPI('/api/accounts/' + acc.id, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ whatsapp_account_id: waId ? parseInt(waId) : null })
             });
             if (d && d.success) loadAccounts();
         }
-
         async function refreshCookie(id) {
-            const d = await fetchAPI(`/api/accounts/${id}/refresh-cookie`, { method: 'POST' });
+            const d = await fetchAPI('/api/accounts/' + id + '/refresh-cookie', { method: 'POST' });
             alert(d ? d.message : '刷新失败');
             loadAccounts();
         }
 
+        // WhatsApp
         async function createWhatsApp() {
             if (!newWhatsApp.value.phone_number) { alert('请填写WhatsApp号码'); return; }
             const d = await fetchAPI('/api/whatsapp-accounts', {
@@ -845,20 +1041,16 @@ createApp({
                 alert(d.message);
                 newWhatsApp.value = { phone_number: '' };
                 loadWhatsApp();
-            } else {
-                alert(d ? d.message : '创建失败');
-            }
+            } else { alert(d ? d.message : '创建失败'); }
         }
-
         async function deleteWhatsApp(id) {
             if (!confirm('确定要删除这个WhatsApp账号吗？')) return;
-            const d = await fetchAPI(`/api/whatsapp-accounts/${id}`, { method: 'DELETE' });
+            const d = await fetchAPI('/api/whatsapp-accounts/' + id, { method: 'DELETE' });
             if (d && d.success) loadWhatsApp();
             else alert(d ? d.message : '删除失败');
         }
-
         async function toggleWhatsApp(wa) {
-            const d = await fetchAPI(`/api/whatsapp-accounts/${wa.id}`, {
+            const d = await fetchAPI('/api/whatsapp-accounts/' + wa.id, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: !wa.enabled })
@@ -866,50 +1058,88 @@ createApp({
             if (d && d.success) loadWhatsApp();
         }
 
+        // 帖子反馈
+        async function toggleFeedback(post, field) {
+            const current = post.my_feedback ? post.my_feedback[field] : false;
+            const body = {};
+            body[field] = !current;
+            const d = await fetchAPI('/api/posts/' + post.id + '/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (d && d.success) {
+                post.my_feedback = d.data;
+            }
+        }
+
+        function showWhatsAppInput(post) {
+            post._whatsappInput = (post.my_feedback && post.my_feedback.whatsapp_number) || '';
+            post._showWhatsAppInput = true;
+        }
+
+        async function submitWhatsApp(post) {
+            const d = await fetchAPI('/api/posts/' + post.id + '/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ whatsapp_number: post._whatsappInput })
+            });
+            if (d && d.success) {
+                post.my_feedback = d.data;
+                post._showWhatsAppInput = false;
+            } else {
+                alert(d ? d.message : '保存失败');
+            }
+        }
+
+        // 翻译
+        async function translatePost(post) {
+            const d = await fetchAPI('/api/posts/' + post.id + '/translate', { method: 'POST' });
+            if (d && d.success) {
+                post.content_zh = d.data.content_zh;
+            } else {
+                alert(d ? d.message : '翻译失败');
+            }
+        }
+
         function refreshData() {
-            loadStatus();
-            loadStats();
-            loadPosts(currentPage.value);
+            loadStatus(); loadStats(); loadPosts(currentPage.value);
             if (activeTab.value === 'sending') loadSendingStatus();
             if (activeTab.value === 'dashboard') loadDashboard();
         }
 
         async function openPostDetail(post) {
-            // 加载带send_tasks的详情
-            const d = await fetchAPI(`/api/posts/${post.id}`);
+            const d = await fetchAPI('/api/posts/' + post.id);
             if (d && d.success) selectedPost.value = d.data;
             else selectedPost.value = post;
         }
 
+        function roleLabel(r) { return { admin: '管理员', manager: '销售经理', employee: '员工' }[r] || r; }
         function sourceLabel(s) { return { home: '首页动态', groups: '小组动态', search: '搜索帖子' }[s] || s || '未知'; }
         function sourceColor(s) { return { home: '#1877f2', groups: '#42b72a', search: '#f7b928' }[s] || '#65676b'; }
         function actionTypeLabel(t) { return { message: '私信', friend_request: '加好友', comment: '评论', dm: '私信', add_friend: '加好友' }[t] || t; }
         function taskTypeLabel(t) { return { comment: '评论', dm: '私信', add_friend: '加好友' }[t] || t; }
         function formatDate(ds) { if (!ds) return '-'; return new Date(ds).toLocaleString('zh-CN'); }
 
-        onMounted(() => {
-            loadStatus(); loadStats(); loadPosts();
-            statusTimer = setInterval(() => {
-                loadStatus(); loadStats();
-                if (activeTab.value === 'posts') loadPosts(currentPage.value);
-                if (activeTab.value === 'sending') loadSendingStatus();
-                if (activeTab.value === 'logs') loadLogs();
-                if (activeTab.value === 'dashboard') loadDashboard();
-            }, 10000);
-        });
-
+        onMounted(() => { checkAuth(); });
         onUnmounted(() => { if (statusTimer) clearInterval(statusTimer); });
 
         return {
+            isLoggedIn, currentUser, loginForm, loginError,
             status, stats, posts, logs, accounts, whatsappAccounts, sendingStatus, dashboardData,
             activeTab, selectedPost, loading, currentPage, totalPosts, totalPages, filters, visiblePages,
             newAccount, newWhatsApp,
             sendingTasks, sendingTasksTotal, sendingTasksPage, sendingTaskFilters,
-            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks,
+            users, newUser, managers,
+            reportFilters, reportData,
+            doLogin, doLogout,
+            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks, loadReport,
+            loadUsers, createUser, toggleUser, resetUserPassword, deleteUser,
             startMonitor, stopMonitor, startSending, stopSending, refreshData, openPostDetail,
             createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie,
             createWhatsApp, deleteWhatsApp, toggleWhatsApp, getLinkedAccounts,
-            sourceLabel, sourceColor, actionTypeLabel, taskTypeLabel, formatDate,
+            toggleFeedback, showWhatsAppInput, submitWhatsApp, translatePost,
+            roleLabel, sourceLabel, sourceColor, actionTypeLabel, taskTypeLabel, formatDate,
         };
     }
 }).mount('#app');
