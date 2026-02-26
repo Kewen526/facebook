@@ -1,9 +1,62 @@
 from datetime import datetime, timezone
+from hashlib import sha256
 from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
 Base = declarative_base()
+
+
+class User(Base):
+    """系统用户表 - Admin/经理/员工"""
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(128), unique=True, nullable=False)
+    password_hash = Column(String(128), nullable=False)
+    role = Column(String(32), nullable=False, index=True)  # "admin" / "manager" / "employee"
+    parent_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # 上级用户ID（经理→admin, 员工→经理）
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    parent = relationship("User", remote_side=[id], backref="children")
+
+    __table_args__ = (
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
+    )
+
+    def set_password(self, password):
+        self.password_hash = sha256(password.encode('utf-8')).hexdigest()
+
+    def check_password(self, password):
+        return self.password_hash == sha256(password.encode('utf-8')).hexdigest()
+
+    def get_team_user_ids(self, session):
+        """获取该用户所管辖的所有用户ID列表（含自己）"""
+        ids = [self.id]
+        if self.role == 'admin':
+            # admin看所有用户
+            all_users = session.query(User).all()
+            ids = [u.id for u in all_users]
+        elif self.role == 'manager':
+            # 经理看自己 + 下属员工
+            employees = session.query(User).filter(User.parent_id == self.id).all()
+            ids.extend([e.id for e in employees])
+        return ids
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.username,
+            "role": self.role,
+            "parent_id": self.parent_id,
+            "parent_name": self.parent.username if self.parent else None,
+            "enabled": self.enabled,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class WhatsAppAccount(Base):
@@ -49,15 +102,18 @@ class Account(Base):
     last_task_at = Column(DateTime, nullable=True)  # 上次发送时间(频率限制用)
     rate_limited_until = Column(DateTime, nullable=True)  # 消息限制解除时间(24小时后自动恢复)
     enabled = Column(Boolean, default=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # 创建者/所属用户
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
 
     whatsapp_account = relationship("WhatsAppAccount", back_populates="sender_accounts")
     send_tasks = relationship("SendTask", back_populates="account", lazy="dynamic")
+    owner = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
         Index('idx_account_type_enabled', 'account_type', 'enabled'),
+        Index('idx_account_user', 'user_id'),
         {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
     )
 
@@ -74,6 +130,8 @@ class Account(Base):
             "last_task_at": self.last_task_at.isoformat() if self.last_task_at else None,
             "rate_limited_until": self.rate_limited_until.isoformat() if self.rate_limited_until else None,
             "enabled": self.enabled,
+            "user_id": self.user_id,
+            "owner_name": self.owner.username if self.owner else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -90,6 +148,7 @@ class Post(Base):
     author_id = Column(String(128), index=True)  # Facebook用户ID
     author_profile_url = Column(Text)  # 作者主页链接
     content = Column(Text)  # 帖子文本内容
+    content_zh = Column(Text, nullable=True)  # 中文翻译内容
     image_urls = Column(Text)  # 图片URL列表(JSON格式)
     post_time = Column(String(128))  # 帖子时间(原始显示)
     source_page = Column(String(32), index=True)  # 来源页面: home / groups / search
@@ -104,6 +163,7 @@ class Post(Base):
     # 关联: 一个帖子可以有多个操作记录
     actions = relationship("PostAction", back_populates="post", lazy="dynamic")
     send_tasks = relationship("SendTask", back_populates="post", lazy="dynamic")
+    feedbacks = relationship("PostFeedback", back_populates="post", lazy="dynamic")
 
     __table_args__ = (
         Index('idx_source_created', 'source_page', 'created_at'),
@@ -120,6 +180,7 @@ class Post(Base):
             "author_id": self.author_id,
             "author_profile_url": self.author_profile_url,
             "content": self.content,
+            "content_zh": self.content_zh,
             "image_urls": self.image_urls,
             "post_time": self.post_time,
             "source_page": self.source_page,
@@ -131,6 +192,43 @@ class Post(Base):
             "discovered_by": self.discovered_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "actions": [a.to_dict() for a in self.actions] if self.actions else [],
+        }
+
+
+class PostFeedback(Base):
+    """帖子反馈表 - 销售人员对帖子的反馈"""
+    __tablename__ = 'post_feedbacks'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    post_id = Column(Integer, ForeignKey('posts.id'), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    is_target_manual = Column(Boolean, nullable=True)  # 手动标记是否为目标客户
+    is_contacted = Column(Boolean, default=False)  # 是否已联系
+    whatsapp_number = Column(String(64), nullable=True)  # 获取到的WhatsApp账号
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    post = relationship("Post", back_populates="feedbacks")
+    user = relationship("User")
+
+    __table_args__ = (
+        Index('idx_feedback_post_user', 'post_id', 'user_id', unique=True),
+        Index('idx_feedback_user', 'user_id'),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "post_id": self.post_id,
+            "user_id": self.user_id,
+            "username": self.user.username if self.user else None,
+            "is_target_manual": self.is_target_manual,
+            "is_contacted": self.is_contacted,
+            "whatsapp_number": self.whatsapp_number,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 
@@ -249,6 +347,26 @@ def init_db():
     """创建所有表"""
     Base.metadata.create_all(engine)
     print("数据库表已创建")
+    # 创建默认admin账号
+    _ensure_admin()
+
+
+def _ensure_admin():
+    """确保存在默认admin账号"""
+    session = SessionLocal()
+    try:
+        admin = session.query(User).filter(User.username == 'admin').first()
+        if not admin:
+            admin = User(username='admin', role='admin')
+            admin.set_password('admin123')
+            session.add(admin)
+            session.commit()
+            print("已创建默认admin账号 (admin / admin123)")
+    except Exception as e:
+        session.rollback()
+        print(f"创建admin账号失败: {e}")
+    finally:
+        session.close()
 
 
 def get_session():
