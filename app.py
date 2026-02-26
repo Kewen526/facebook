@@ -9,7 +9,7 @@ from flask import Flask, render_template, jsonify, request, session as flask_ses
 from flask_socketio import SocketIO
 from sqlalchemy import func, and_
 
-from config import FLASK_PORT, COOKIES_DIR
+from config import FLASK_PORT, COOKIES_DIR, ZHIPU_KEY_API, ZHIPU_MODEL
 from models import (
     init_db, get_session, Post, PostAction, MonitorLog,
     Account, WhatsAppAccount, SendTask, User, PostFeedback
@@ -504,33 +504,61 @@ def translate_post(post_db_id):
         return jsonify({"success": False, "message": f"翻译失败: {e}"}), 500
 
 
+def _get_translate_key():
+    """获取一个智谱AI API密钥用于翻译"""
+    try:
+        proxies = {'http': None, 'https': None}
+        resp = http_requests.post(ZHIPU_KEY_API, proxies=proxies, timeout=10)
+        if resp.status_code == 200:
+            result = resp.json()
+            if result.get("success") and "data" in result:
+                keys = [item["key"] for item in result["data"]]
+                if keys:
+                    import random
+                    return random.choice(keys)
+    except Exception as e:
+        logger.error(f"获取翻译密钥失败: {e}")
+    return None
+
+
 def _translate_to_chinese(text):
-    """使用Google Translate将文本翻译为中文"""
+    """使用智谱AI将文本翻译为中文"""
     try:
         if not text or not text.strip():
             return None
-        # 截取前5000字符
-        text = text[:5000]
-        resp = http_requests.get(
-            'https://translate.googleapis.com/translate_a/single',
-            params={
-                'client': 'gtx',
-                'sl': 'auto',
-                'tl': 'zh-CN',
-                'dt': 't',
-                'q': text,
-            },
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            logger.error(f"Google翻译HTTP错误: {resp.status_code}")
+        # 截取前3000字符
+        text = text[:3000]
+
+        api_key = _get_translate_key()
+        if not api_key:
+            logger.error("无法获取智谱AI密钥，翻译失败")
             return None
-        result = resp.json()
-        # 拼接所有翻译片段
-        translated = ''.join(part[0] for part in result[0] if part[0])
-        return translated.strip() if translated else None
+
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        os.environ['NO_PROXY'] = '*'
+        os.environ['HTTP_PROXY'] = ''
+        os.environ['HTTPS_PROXY'] = ''
+
+        from zhipuai import ZhipuAI
+        client = ZhipuAI(api_key=api_key, timeout=30, max_retries=1)
+
+        response = client.chat.completions.create(
+            model=ZHIPU_MODEL,
+            messages=[{"role": "user", "content": f"请将以下文本翻译为中文，只返回翻译结果，不要添加任何解释：\n\n{text}"}],
+            temperature=0.3,
+            max_tokens=2048,
+        )
+
+        if response.choices and len(response.choices) > 0:
+            content = response.choices[0].message.content
+            if content:
+                import re
+                cleaned = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+                return cleaned if cleaned else None
+        return None
     except Exception as e:
-        logger.error(f"Google翻译失败: {e}")
+        logger.error(f"智谱AI翻译失败: {e}")
         return None
 
 
@@ -540,21 +568,23 @@ _translate_stop = threading.Event()
 
 
 def _auto_translate_worker():
-    """后台线程：自动翻译所有未翻译的帖子"""
+    """后台线程：自动翻译所有未翻译的帖子，优先目标客户+最新日期"""
     logger.info("自动翻译线程已启动")
     while not _translate_stop.is_set():
         try:
             db = get_session()
             try:
-                # 每次取一批未翻译的帖子（有内容但没有中文翻译）
+                # 优先翻译目标客户的帖子（最新日期优先）
                 untranslated = db.query(Post).filter(
                     Post.content != None,
                     Post.content != '',
                     Post.content_zh == None
-                ).order_by(Post.created_at.desc()).limit(10).all()
+                ).order_by(
+                    Post.is_target.desc(),       # 目标客户优先
+                    Post.created_at.desc()       # 最新日期优先
+                ).limit(10).all()
 
                 if not untranslated:
-                    # 没有待翻译的帖子，等待30秒再检查
                     _translate_stop.wait(30)
                     continue
 
@@ -566,17 +596,17 @@ def _auto_translate_worker():
                         if content_zh:
                             post.content_zh = content_zh
                             db.commit()
-                            logger.info(f"自动翻译成功: 帖子ID={post.id}")
+                            tag = "目标客户" if post.is_target else "非目标"
+                            logger.info(f"自动翻译成功: 帖子ID={post.id} [{tag}]")
                         else:
-                            # 翻译失败，标记为翻译失败以避免反复重试
                             post.content_zh = '[翻译失败]'
                             db.commit()
                             logger.warning(f"自动翻译失败: 帖子ID={post.id}")
                     except Exception as e:
                         db.rollback()
                         logger.error(f"翻译帖子 {post.id} 出错: {e}")
-                    # 每条翻译之间间隔1秒，避免API限流
-                    _translate_stop.wait(1)
+                    # 每条翻译之间间隔2秒，避免API限流
+                    _translate_stop.wait(2)
             finally:
                 db.close()
         except Exception as e:
