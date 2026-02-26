@@ -3,6 +3,12 @@ import os
 import threading
 import time
 import requests as http_requests
+
+# 禁用系统代理，确保翻译API直连
+os.environ['HTTP_PROXY'] = ''
+os.environ['HTTPS_PROXY'] = ''
+os.environ['http_proxy'] = ''
+os.environ['https_proxy'] = ''
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import Flask, render_template, jsonify, request, session as flask_session
@@ -10,8 +16,7 @@ from flask_socketio import SocketIO
 from sqlalchemy import func, and_
 
 from config import (
-    FLASK_PORT, COOKIES_DIR, ZHIPU_KEY_API, ZHIPU_MODEL,
-    BAIDU_TRANSLATE_APPID, BAIDU_TRANSLATE_SECRET, BAIDU_TRANSLATE_URL
+    FLASK_PORT, COOKIES_DIR, ZHIPU_KEY_API, ZHIPU_MODEL
 )
 from models import (
     init_db, get_session, Post, PostAction, MonitorLog,
@@ -520,41 +525,28 @@ def translate_post(post_db_id):
 
 
 def _translate_to_chinese(text):
-    """使用百度翻译API将文本翻译为中文"""
-    import hashlib
-    import random as _rand
+    """使用QQ翻译API将文本翻译为中文（自动检测语言）"""
     try:
         if not text or not text.strip():
             return None
-        # 百度翻译API单次最大6000字节，截取前2000字符确保安全
+        # 截取前2000字符
         text = text[:2000]
 
-        salt = str(_rand.randint(10000, 99999))
-        sign_str = BAIDU_TRANSLATE_APPID + text + salt + BAIDU_TRANSLATE_SECRET
-        sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
-
-        params = {
-            'q': text,
-            'from': 'auto',
-            'to': 'zh',
-            'appid': BAIDU_TRANSLATE_APPID,
-            'salt': salt,
-            'sign': sign,
-        }
-
-        resp = http_requests.get(BAIDU_TRANSLATE_URL, params=params, timeout=10)
+        resp = http_requests.get(
+            'https://api.lolimi.cn/API/qqfy/api',
+            params={'msg': text, 'type': 'json'},
+            proxies={'http': None, 'https': None},
+            timeout=30
+        )
         result = resp.json()
 
-        if 'trans_result' in result:
-            translated_parts = [item['dst'] for item in result['trans_result']]
-            return '\n'.join(translated_parts)
+        if result.get('code') == 1 and result.get('text'):
+            return result['text']
         else:
-            error_code = result.get('error_code', 'unknown')
-            error_msg = result.get('error_msg', 'unknown')
-            logger.error(f"百度翻译API错误: code={error_code}, msg={error_msg}")
+            logger.error(f"QQ翻译API错误: {result}")
             return None
     except Exception as e:
-        logger.error(f"百度翻译失败: {e}")
+        logger.error(f"QQ翻译失败: {e}")
         return None
 
 
@@ -616,8 +608,8 @@ def _auto_translate_worker():
                     except Exception as e:
                         db.rollback()
                         logger.error(f"翻译帖子 {post.id} 出错: {e}")
-                    # 百度翻译标准版QPS=1，间隔1.1秒确保不超限
-                    _translate_stop.wait(1.1)
+                    # 翻译间隔，避免请求过快
+                    _translate_stop.wait(0.5)
             finally:
                 db.close()
         except Exception as e:
@@ -653,24 +645,22 @@ def retry_failed_translations():
 @app.route('/api/translate/test')
 @login_required
 def test_translation():
-    """测试百度翻译API是否可用"""
-    import hashlib
-    import random as _rand
+    """测试QQ翻译API是否可用"""
     user = request.current_user
     if user.role != 'admin':
         return jsonify({"success": False, "message": "仅管理员可操作"}), 403
     try:
-        text = "Hello, this is a test."
-        salt = str(_rand.randint(10000, 99999))
-        sign_str = BAIDU_TRANSLATE_APPID + text + salt + BAIDU_TRANSLATE_SECRET
-        sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
-        params = {'q': text, 'from': 'en', 'to': 'zh', 'appid': BAIDU_TRANSLATE_APPID, 'salt': salt, 'sign': sign}
-        resp = http_requests.get(BAIDU_TRANSLATE_URL, params=params, timeout=10)
+        resp = http_requests.get(
+            'https://api.lolimi.cn/API/qqfy/api',
+            params={'msg': 'Hello, this is a test.', 'type': 'json'},
+            proxies={'http': None, 'https': None},
+            timeout=30
+        )
         result = resp.json()
-        if 'trans_result' in result:
-            return jsonify({"success": True, "message": "百度翻译API正常", "result": result})
+        if result.get('code') == 1 and result.get('text'):
+            return jsonify({"success": True, "message": f"QQ翻译API正常，测试结果: {result['text']}", "result": result})
         else:
-            return jsonify({"success": False, "message": f"API错误: code={result.get('error_code')}, msg={result.get('error_msg')}", "result": result})
+            return jsonify({"success": False, "message": f"API错误: {result}", "result": result})
     except Exception as e:
         return jsonify({"success": False, "message": f"请求失败: {e}"})
 
