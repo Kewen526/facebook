@@ -505,27 +505,32 @@ def translate_post(post_db_id):
 
 
 def _translate_to_chinese(text):
-    """调用AI将文本翻译为中文"""
+    """使用Google Translate将文本翻译为中文"""
     try:
-        # 获取API key
-        resp = http_requests.get(ZHIPU_KEY_API, timeout=10)
-        if resp.status_code != 200:
+        if not text or not text.strip():
             return None
-        api_key = resp.json().get('key') or resp.json().get('data', {}).get('key') or resp.text.strip()
-
-        from zhipuai import ZhipuAI
-        client = ZhipuAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model=ZHIPU_MODEL,
-            messages=[
-                {"role": "system", "content": "你是一个翻译助手。请将用户提供的文本翻译成中文。只输出翻译结果，不要添加任何解释或额外内容。如果文本已经是中文，直接返回原文。"},
-                {"role": "user", "content": text[:3000]}
-            ],
-            temperature=0.3,
+        # 截取前5000字符
+        text = text[:5000]
+        resp = http_requests.get(
+            'https://translate.googleapis.com/translate_a/single',
+            params={
+                'client': 'gtx',
+                'sl': 'auto',
+                'tl': 'zh-CN',
+                'dt': 't',
+                'q': text,
+            },
+            timeout=15,
         )
-        return response.choices[0].message.content.strip()
+        if resp.status_code != 200:
+            logger.error(f"Google翻译HTTP错误: {resp.status_code}")
+            return None
+        result = resp.json()
+        # 拼接所有翻译片段
+        translated = ''.join(part[0] for part in result[0] if part[0])
+        return translated.strip() if translated else None
     except Exception as e:
-        logger.error(f"翻译失败: {e}")
+        logger.error(f"Google翻译失败: {e}")
         return None
 
 
