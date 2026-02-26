@@ -563,15 +563,21 @@ def _auto_translate_worker():
         try:
             db = get_session()
             try:
-                # 优先翻译未翻译的帖子
+                # 优先翻译目标客户的未翻译帖子，再翻译非目标客户的
+                # 分两次查询避免 ORDER BY 多列导致 sort_buffer 溢出
                 untranslated = db.query(Post).filter(
                     Post.content != None,
                     Post.content != '',
-                    Post.content_zh == None
-                ).order_by(
-                    Post.is_target.desc(),
-                    Post.created_at.desc()
-                ).limit(10).all()
+                    Post.content_zh == None,
+                    Post.is_target == True
+                ).order_by(Post.id.desc()).limit(10).all()
+
+                if not untranslated:
+                    untranslated = db.query(Post).filter(
+                        Post.content != None,
+                        Post.content != '',
+                        Post.content_zh == None
+                    ).order_by(Post.id.desc()).limit(10).all()
 
                 # 每10轮（约5分钟）也重试翻译失败的帖子
                 if not untranslated:
@@ -580,7 +586,7 @@ def _auto_translate_worker():
                         _retry_counter = 0
                         failed = db.query(Post).filter(
                             Post.content_zh == '[翻译失败]'
-                        ).order_by(Post.is_target.desc(), Post.created_at.desc()).limit(5).all()
+                        ).order_by(Post.id.desc()).limit(5).all()
                         if failed:
                             logger.info(f"重试 {len(failed)} 条翻译失败的帖子")
                             untranslated = failed
