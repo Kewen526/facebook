@@ -166,9 +166,13 @@
         .report-filters { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
         .report-filters input[type="date"] { padding: 8px 12px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 14px; }
         .report-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
-        .report-stat-card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); text-align: center; }
+        .report-stat-card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); text-align: center; transition: all 0.2s; }
+        .report-stat-card.clickable { cursor: pointer; }
+        .report-stat-card.clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .report-stat-card.clickable:active { transform: translateY(0); }
         .report-stat-card .number { font-size: 28px; font-weight: 700; }
         .report-stat-card .label { font-size: 13px; color: #65676b; margin-top: 4px; }
+        .report-stat-card.clickable .label::after { content: ' →'; font-size: 11px; }
 
         @media (max-width: 768px) {
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
@@ -273,6 +277,12 @@
                         <option value="">全部类型</option>
                         <option value="true">目标客户</option>
                         <option value="false">非目标客户</option>
+                    </select>
+                    <select class="filter-select" v-model="filters.feedback_filter" @change="loadPosts(1)">
+                        <option value="">全部状态</option>
+                        <option value="manual_target">手动标记目标</option>
+                        <option value="contacted">已联系</option>
+                        <option value="has_whatsapp">已获取WhatsApp</option>
                     </select>
                     <input class="filter-input" v-model="filters.search" placeholder="搜索帖子内容..." @keyup.enter="loadPosts(1)" />
                     <button class="btn btn-primary" @click="loadPosts(1)">搜索</button>
@@ -521,23 +531,23 @@
                         <button class="btn btn-primary" @click="loadReport">查询</button>
                     </div>
                     <div class="report-stats">
-                        <div class="report-stat-card">
+                        <div class="report-stat-card clickable" @click="drillDownReport('total')">
                             <div class="number" style="color:#1877f2;">{{ reportData.total_posts || 0 }}</div>
                             <div class="label">抓取帖子总数</div>
                         </div>
-                        <div class="report-stat-card">
+                        <div class="report-stat-card clickable" @click="drillDownReport('ai_target')">
                             <div class="number" style="color:#42b72a;">{{ reportData.target_posts || 0 }}</div>
                             <div class="label">AI判定目标客户</div>
                         </div>
-                        <div class="report-stat-card">
+                        <div class="report-stat-card clickable" @click="drillDownReport('manual_target')">
                             <div class="number" style="color:#f7b928;">{{ reportData.marked_target || 0 }}</div>
                             <div class="label">手动标记目标客户</div>
                         </div>
-                        <div class="report-stat-card">
+                        <div class="report-stat-card clickable" @click="drillDownReport('contacted')">
                             <div class="number" style="color:#1877f2;">{{ reportData.contacted || 0 }}</div>
                             <div class="label">已联系</div>
                         </div>
-                        <div class="report-stat-card">
+                        <div class="report-stat-card clickable" @click="drillDownReport('has_whatsapp')">
                             <div class="number" style="color:#25d366;">{{ reportData.got_whatsapp || 0 }}</div>
                             <div class="label">已获取WhatsApp</div>
                         </div>
@@ -746,7 +756,7 @@ createApp({
         const currentPage = ref(1);
         const totalPosts = ref(0);
         const totalPages = ref(0);
-        const filters = ref({ source: '', is_target: '', search: '' });
+        const filters = ref({ source: '', is_target: '', search: '', feedback_filter: '' });
         const newAccount = ref({ name: '', account_type: 'monitor', cookie_url: '' });
         const newWhatsApp = ref({ phone_number: '' });
         const sendingTasks = ref([]);
@@ -852,6 +862,7 @@ createApp({
             if (filters.value.source) params.set('source', filters.value.source);
             if (filters.value.is_target) params.set('is_target', filters.value.is_target);
             if (filters.value.search) params.set('search', filters.value.search);
+            if (filters.value.feedback_filter) params.set('feedback_filter', filters.value.feedback_filter);
             const d = await fetchAPI('/api/posts?' + params);
             if (d && d.success) {
                 // 为每个帖子添加响应式辅助字段
@@ -914,6 +925,26 @@ createApp({
             if (reportFilters.end_date) params.set('end_date', reportFilters.end_date);
             const d = await fetchAPI('/api/stats/report?' + params);
             if (d && d.success) reportData.value = d.data;
+        }
+
+        function drillDownReport(filterType) {
+            // 重置所有筛选条件
+            filters.value = { source: '', is_target: '', search: '', feedback_filter: '' };
+            // 根据点击的统计类型设置对应筛选
+            if (filterType === 'total') {
+                // 全部帖子，不需要额外筛选
+            } else if (filterType === 'ai_target') {
+                filters.value.is_target = 'true';
+            } else if (filterType === 'manual_target') {
+                filters.value.feedback_filter = 'manual_target';
+            } else if (filterType === 'contacted') {
+                filters.value.feedback_filter = 'contacted';
+            } else if (filterType === 'has_whatsapp') {
+                filters.value.feedback_filter = 'has_whatsapp';
+            }
+            // 切换到帖子列表并加载
+            activeTab.value = 'posts';
+            loadPosts(1);
         }
 
         // 用户管理
@@ -1134,7 +1165,7 @@ createApp({
             users, newUser, managers,
             reportFilters, reportData,
             doLogin, doLogout,
-            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks, loadReport,
+            loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks, loadReport, drillDownReport,
             loadUsers, createUser, toggleUser, resetUserPassword, deleteUser,
             startMonitor, stopMonitor, startSending, stopSending, refreshData, openPostDetail,
             createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie,
