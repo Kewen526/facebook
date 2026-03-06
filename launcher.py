@@ -346,10 +346,14 @@ class FacebookMonitorApp:
 
     # ========== Web服务（登录后自动启动） ==========
     def _auto_start_web_server(self):
-        """登录成功后自动启动Flask Web服务"""
+        """登录成功后自动启动Flask Web服务（延迟执行，避免阻塞UI）"""
         if self.web_server_running:
             return
+        # 延迟500ms启动，让Tkinter先完成UI刷新
+        self.root.after(500, self._do_start_web_server)
 
+    def _do_start_web_server(self):
+        """实际启动Flask的逻辑"""
         # 应用headless设置
         self.on_browser_mode_change()
 
@@ -361,11 +365,11 @@ class FacebookMonitorApp:
                 init_db()
                 start_auto_translate()
 
-                logger.info(f"Web管理服务已启动，端口: {self.port}")
-
                 self.web_server_running = True
-                # 登录后"打开管理页面"按钮立即可用
+                # 启用"打开管理页面"按钮
                 self.root.after(0, lambda: self.btn_open_web.config(state='normal', cursor='hand2'))
+
+                logger.info(f"Web管理服务已启动，端口: {self.port}")
 
                 app.run(host='0.0.0.0', port=self.port, debug=False, threaded=True,
                         use_reloader=False)
@@ -387,20 +391,24 @@ class FacebookMonitorApp:
         # 应用headless设置
         self.on_browser_mode_change()
 
-        try:
-            from monitor import start_monitor_thread
-            from task_queue import start_task_processor
+        def _start():
+            try:
+                from monitor import start_monitor_thread
+                from task_queue import start_task_processor
 
-            start_monitor_thread()
-            logger.info("监控线程已启动")
+                start_monitor_thread()
+                logger.info("监控线程已启动")
 
-            start_task_processor()
-            logger.info("发送任务处理器已启动")
+                start_task_processor()
+                logger.info("发送任务处理器已启动")
 
-            self._on_service_started()
-        except Exception as e:
-            logger.error(f"启动监控/发送失败: {e}")
-            self.btn_start_server.config(state='normal', bg='#42b72a', cursor='hand2')
+                self.root.after(0, self._on_service_started)
+            except Exception as e:
+                logger.error(f"启动监控/发送失败: {e}")
+                self.root.after(0, lambda: self.btn_start_server.config(
+                    state='normal', bg='#42b72a', cursor='hand2'))
+
+        threading.Thread(target=_start, daemon=True).start()
 
     def _on_service_started(self):
         self.monitor_running = True
