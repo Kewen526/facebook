@@ -131,6 +131,9 @@ def auth_login():
             "message": "登录成功",
             "data": user.to_dict()
         })
+    except Exception as e:
+        logger.error(f"登录接口异常: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"服务器内部错误: {e}"}), 500
     finally:
         db.close()
 

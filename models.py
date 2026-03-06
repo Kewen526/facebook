@@ -344,11 +344,36 @@ SessionLocal = sessionmaker(bind=engine)
 
 
 def init_db():
-    """创建所有表"""
+    """创建所有表，并自动补齐新增列"""
     Base.metadata.create_all(engine)
     print("数据库表已创建")
+    # 自动补齐users表可能缺失的列
+    _migrate_users_table()
     # 创建默认admin账号
     _ensure_admin()
+
+
+def _migrate_users_table():
+    """检查并补齐users表的新增列"""
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    if 'users' not in insp.get_table_names():
+        return
+    existing = {col['name'] for col in insp.get_columns('users')}
+    migrations = []
+    if 'parent_id' not in existing:
+        migrations.append("ALTER TABLE users ADD COLUMN parent_id INT NULL")
+    if 'enabled' not in existing:
+        migrations.append("ALTER TABLE users ADD COLUMN enabled TINYINT(1) DEFAULT 1")
+    if 'updated_at' not in existing:
+        migrations.append("ALTER TABLE users ADD COLUMN updated_at DATETIME NULL")
+    if migrations:
+        with engine.connect() as conn:
+            for sql in migrations:
+                print(f"数据库迁移: {sql}")
+                conn.execute(text(sql))
+            conn.commit()
+        print("users表列补齐完成")
 
 
 def _ensure_admin():
