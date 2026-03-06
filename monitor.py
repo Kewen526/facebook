@@ -98,16 +98,27 @@ def download_cookies(cookie_url=None, account_name=None):
         return None
 
 
-def create_driver():
-    """创建浏览器实例 - 带反检测措施"""
-    print("[Monitor] 创建浏览器实例...", flush=True)
-    logger.info("创建浏览器实例...")
+def create_driver(headless=None):
+    """创建浏览器实例 - 带反检测措施
+    headless: 是否无头模式。None则读取config.BROWSER_HEADLESS
+    """
+    from config import BROWSER_HEADLESS
+    if headless is None:
+        headless = BROWSER_HEADLESS
+
+    mode_str = "无头模式" if headless else "有头模式"
+    print(f"[Monitor] 创建浏览器实例（{mode_str}）...", flush=True)
+    logger.info(f"创建浏览器实例（{mode_str}）...")
 
     # 先尝试undetected-chromedriver
     try:
         import undetected_chromedriver as uc
         options = uc.ChromeOptions()
-        options.add_argument("--start-maximized")
+        if headless:
+            options.add_argument("--headless=new")
+            options.add_argument("--window-size=1920,1080")
+        else:
+            options.add_argument("--start-maximized")
         options.add_argument("--disable-notifications")
         options.add_argument("--disable-infobars")
         options.add_argument("--no-sandbox")
@@ -116,8 +127,8 @@ def create_driver():
         user_agent = random.choice(USER_AGENTS)
         options.add_argument(f"--user-agent={user_agent}")
         driver = uc.Chrome(options=options, version_main=None)
-        print("[Monitor] 使用undetected-chromedriver创建成功", flush=True)
-        logger.info("使用undetected-chromedriver创建成功")
+        print(f"[Monitor] 使用undetected-chromedriver创建成功（{mode_str}）", flush=True)
+        logger.info(f"使用undetected-chromedriver创建成功（{mode_str}）")
         return driver
     except Exception as e:
         print(f"[Monitor] undetected-chromedriver不可用({e})，使用Selenium+反检测", flush=True)
@@ -130,7 +141,11 @@ def create_driver():
         from selenium.webdriver.chrome.service import Service
 
         chrome_options = Options()
-        chrome_options.add_argument("--start-maximized")
+        if headless:
+            chrome_options.add_argument("--headless=new")
+            chrome_options.add_argument("--window-size=1920,1080")
+        else:
+            chrome_options.add_argument("--start-maximized")
         chrome_options.add_argument("--disable-notifications")
         chrome_options.add_argument("--disable-infobars")
         chrome_options.add_argument("--no-sandbox")

@@ -1241,6 +1241,26 @@ def get_stats_report():
     })
 
 
+# ============ 浏览器显示控制 API ============
+@app.route('/api/browser/headless', methods=['GET'])
+@login_required
+def get_browser_headless():
+    import config
+    return jsonify({"success": True, "headless": config.BROWSER_HEADLESS})
+
+
+@app.route('/api/browser/headless', methods=['POST'])
+@login_required
+def set_browser_headless():
+    data = request.get_json()
+    if data is None or 'headless' not in data:
+        return jsonify({"success": False, "message": "缺少 headless 参数"}), 400
+    import config
+    config.BROWSER_HEADLESS = bool(data['headless'])
+    mode = "隐藏浏览器" if config.BROWSER_HEADLESS else "显示浏览器"
+    return jsonify({"success": True, "message": f"已设置为{mode}模式（下次启动浏览器生效）", "headless": config.BROWSER_HEADLESS})
+
+
 if __name__ == '__main__':
     init_db()
     start_auto_translate()

@@ -35,6 +35,9 @@ SEND_COOLDOWN_SECONDS = 600  # 每个发送账号任务间隔10分钟
 DAILY_SEND_LIMIT = 5  # 每个发送账号每天最多执行的发送任务数（按自然日计算）
 SEARCH_KEYWORD = "dropshipping"  # 搜索关键词
 
+# ============ 浏览器显示配置 ============
+BROWSER_HEADLESS = False  # 是否隐藏浏览器窗口（无头模式）
+
 
 def build_fb_today_url(keyword=None):
     """生成今天的Facebook搜索URL"""
