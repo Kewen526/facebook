@@ -20,6 +20,36 @@ def build():
         print("正在安装 PyInstaller...")
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pyinstaller'])
 
+    # 检查关键依赖是否已安装
+    missing = []
+    for mod_name in ['sqlalchemy', 'pymysql', 'flask', 'flask_socketio', 'requests', 'selenium', 'jinja2']:
+        try:
+            __import__(mod_name)
+            mod = sys.modules[mod_name]
+            print(f"  [OK] {mod_name}: {getattr(mod, '__version__', '?')} -> {getattr(mod, '__file__', '?')}")
+        except ImportError:
+            missing.append(mod_name)
+            print(f"  [MISSING] {mod_name}")
+    if missing:
+        print(f"\n错误: 以下依赖未安装: {', '.join(missing)}")
+        print(f"请先运行: pip install {' '.join(missing)}")
+        sys.exit(1)
+
+    # 获取site-packages路径（确保PyInstaller能找到所有包）
+    import site
+    site_packages = []
+    for p in site.getsitepackages() + [site.getusersitepackages()]:
+        if os.path.isdir(p):
+            site_packages.append(p)
+    # 同时获取当前Python的lib路径
+    for p in sys.path:
+        if 'site-packages' in p and os.path.isdir(p) and p not in site_packages:
+            site_packages.append(p)
+
+    print(f"\n检测到 site-packages 路径:")
+    for p in site_packages:
+        print(f"  {p}")
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
     # PyInstaller参数
@@ -29,10 +59,25 @@ def build():
         '--onedir',           # 打包为目录（比onefile启动更快）
         '--windowed',         # GUI模式，不显示黑色控制台窗口
         '--noconfirm',        # 覆盖已有输出
+    ]
 
-        # 添加数据文件
+    # 添加所有site-packages路径，确保PyInstaller能找到已安装的包
+    for sp in site_packages:
+        args.append(f'--paths={sp}')
+
+    # 同时添加项目目录本身
+    args.append(f'--paths={base_dir}')
+
+    args += [
+        # 添加数据文件：模板和所有项目Python文件
         f'--add-data={os.path.join(base_dir, "templates")}' + os.pathsep + 'templates',
         f'--add-data={os.path.join(base_dir, "config.py")}' + os.pathsep + '.',
+        f'--add-data={os.path.join(base_dir, "models.py")}' + os.pathsep + '.',
+        f'--add-data={os.path.join(base_dir, "app.py")}' + os.pathsep + '.',
+        f'--add-data={os.path.join(base_dir, "monitor.py")}' + os.pathsep + '.',
+        f'--add-data={os.path.join(base_dir, "sender.py")}' + os.pathsep + '.',
+        f'--add-data={os.path.join(base_dir, "task_queue.py")}' + os.pathsep + '.',
+        f'--add-data={os.path.join(base_dir, "ai_analyzer.py")}' + os.pathsep + '.',
 
         # 强制收集完整包（确保所有子模块都被打包）
         '--collect-all=sqlalchemy',
