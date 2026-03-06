@@ -95,21 +95,10 @@ def get_next_task(account_id):
             logger.debug(f"[{account.name}] 今日已完成 {daily_count} 个任务，达到上限 {DAILY_SEND_LIMIT}，跳过")
             return None
 
-        # 检查24小时消息限制
-        if account.rate_limited_until:
-            rate_limited_until = account.rate_limited_until
-            if rate_limited_until.tzinfo is None:
-                rate_limited_until = rate_limited_until.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) < rate_limited_until:
-                remaining_h = (rate_limited_until - datetime.now(timezone.utc)).total_seconds() / 3600
-                logger.debug(f"[{account.name}] 24小时消息限制中，还需等待 {remaining_h:.1f}h")
-                return None
-            else:
-                # 限制已过期，清除标记
-                account.rate_limited_until = None
-                account.status = 'active'
-                session.commit()
-                logger.info(f"[{account.name}] 24小时消息限制已解除")
+        # 检查是否被限制（需人工解除，不再自动恢复）
+        if account.status == 'restricted' or account.rate_limited_until:
+            logger.debug(f"[{account.name}] 账号已被限制，需管理员手动解除，跳过")
+            return None
 
         # 检查冷却时间
         if account.last_task_at:
@@ -253,13 +242,11 @@ def execute_task(task_info, sender_engine):
         account = session.query(Account).filter(Account.id == account_id).first()
         if account:
             account.last_task_at = datetime.now(timezone.utc)
-            if not success and '被限制' in (detail or ''):
-                account.status = 'banned'
-            # 检测24小时消息限制标记
-            if not success and 'RATE_LIMITED' in (detail or ''):
-                account.rate_limited_until = datetime.now(timezone.utc) + timedelta(hours=24)
-                account.status = 'rate_limited'
-                logger.warning(f"[{account_name}] 触发24小时消息限制，暂停至 {account.rate_limited_until}")
+            # 检测任何发送限制，标记为restricted，需人工解除
+            if not success and ('被限制' in (detail or '') or 'RATE_LIMITED' in (detail or '')):
+                account.status = 'restricted'
+                account.rate_limited_until = datetime.now(timezone.utc)
+                logger.warning(f"[{account_name}] 检测到发送限制，已标记为restricted，需管理员手动解除")
                 # 将该账号的所有pending DM任务标记为skipped
                 pending_dm_tasks = session.query(SendTask).filter(
                     SendTask.account_id == account_id,
@@ -405,7 +392,7 @@ def run_task_processor():
         sender_accounts = session.query(Account).filter(
             Account.account_type == 'sender',
             Account.enabled == True,
-            Account.status != 'banned'
+            Account.status.notin_(['banned', 'restricted'])
         ).all()
         accounts_info = [(a.id, a.name, a.cookie_url) for a in sender_accounts if a.cookie_url]
     finally:

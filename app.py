@@ -337,14 +337,7 @@ def get_posts():
 
     query = db.query(Post).order_by(Post.created_at.desc())
 
-    # 数据隔离：非admin只能看自己团队的帖子
-    if user.role != 'admin':
-        account_names = _get_team_account_names(user, db)
-        if account_names:
-            query = query.filter(Post.discovered_by.in_(account_names))
-        else:
-            # 没有关联账号则看不到帖子
-            return jsonify({"success": True, "data": [], "total": 0, "page": page, "per_page": per_page, "total_pages": 0})
+    # 帖子数据全员共享，不再按团队隔离
 
     if source:
         query = query.filter(Post.source_page == source)
@@ -369,21 +362,35 @@ def get_posts():
     total = query.count()
     posts = query.offset((page - 1) * per_page).limit(per_page).all()
 
-    # 附加当前用户的反馈信息
+    # 附加当前用户的反馈 + 所有反馈摘要（标记人信息）
     post_ids = [p.id for p in posts]
-    feedbacks = {}
+    my_feedbacks = {}
+    all_feedbacks_map = {}
     if post_ids:
         fb_list = db.query(PostFeedback).filter(
-            PostFeedback.post_id.in_(post_ids),
-            PostFeedback.user_id == user.id
+            PostFeedback.post_id.in_(post_ids)
         ).all()
         for fb in fb_list:
-            feedbacks[fb.post_id] = fb.to_dict()
+            if fb.user_id == user.id:
+                my_feedbacks[fb.post_id] = fb.to_dict()
+            if fb.post_id not in all_feedbacks_map:
+                all_feedbacks_map[fb.post_id] = []
+            all_feedbacks_map[fb.post_id].append(fb)
 
     result = []
     for p in posts:
         d = p.to_dict()
-        d['my_feedback'] = feedbacks.get(p.id)
+        d['my_feedback'] = my_feedbacks.get(p.id)
+        # 标记人摘要
+        fbs = all_feedbacks_map.get(p.id, [])
+        d['marked_target_by'] = [
+            {"username": fb.user.username if fb.user else "未知", "time": fb.updated_at.isoformat() if fb.updated_at else None}
+            for fb in fbs if fb.is_target_manual
+        ]
+        d['marked_contacted_by'] = [
+            {"username": fb.user.username if fb.user else "未知", "time": fb.updated_at.isoformat() if fb.updated_at else None}
+            for fb in fbs if fb.is_contacted
+        ]
         result.append(d)
 
     return jsonify({
@@ -416,10 +423,9 @@ def get_post_detail(post_db_id):
     ).first()
     data['my_feedback'] = fb.to_dict() if fb else None
 
-    # 附加所有反馈（经理/admin可看）
-    if user.role in ('admin', 'manager'):
-        all_fbs = db.query(PostFeedback).filter(PostFeedback.post_id == post_db_id).all()
-        data['all_feedbacks'] = [f.to_dict() for f in all_fbs]
+    # 附加所有反馈（所有用户可看，数据打通）
+    all_fbs = db.query(PostFeedback).filter(PostFeedback.post_id == post_db_id).all()
+    data['all_feedbacks'] = [f.to_dict() for f in all_fbs]
 
     return jsonify({"success": True, "data": data})
 
@@ -478,19 +484,8 @@ def get_feedback(post_db_id):
     user = request.current_user
     db = request.db
 
-    if user.role == 'admin':
-        fbs = db.query(PostFeedback).filter(PostFeedback.post_id == post_db_id).all()
-    elif user.role == 'manager':
-        team_ids = _get_team_user_ids(user, db)
-        fbs = db.query(PostFeedback).filter(
-            PostFeedback.post_id == post_db_id,
-            PostFeedback.user_id.in_(team_ids)
-        ).all()
-    else:
-        fbs = db.query(PostFeedback).filter(
-            PostFeedback.post_id == post_db_id,
-            PostFeedback.user_id == user.id
-        ).all()
+    # 反馈数据全员可见
+    fbs = db.query(PostFeedback).filter(PostFeedback.post_id == post_db_id).all()
 
     return jsonify({"success": True, "data": [f.to_dict() for f in fbs]})
 
@@ -677,14 +672,8 @@ def get_stats():
     user = request.current_user
     db = request.db
 
-    if user.role == 'admin':
-        base_query = db.query(Post)
-    else:
-        account_names = _get_team_account_names(user, db)
-        if account_names:
-            base_query = db.query(Post).filter(Post.discovered_by.in_(account_names))
-        else:
-            return jsonify({"success": True, "data": {"total_posts": 0, "target_posts": 0, "non_target_posts": 0, "liked_posts": 0, "interested_posts": 0, "source_stats": {}, "recent_logs": []}})
+    # 帖子统计全员共享
+    base_query = db.query(Post)
 
     total_posts = base_query.count()
     target_posts = base_query.filter(Post.is_target == True).count()
@@ -765,6 +754,16 @@ def create_account():
     if existing:
         return jsonify({"success": False, "message": "账号名称已存在"}), 400
 
+    # 非admin用户限制：每种类型最多2个账号
+    if user.role != 'admin':
+        count = db.query(Account).filter(
+            Account.user_id == user.id,
+            Account.account_type == data['account_type']
+        ).count()
+        type_label = "发送" if data['account_type'] == 'sender' else "监控"
+        if count >= 2:
+            return jsonify({"success": False, "message": f"每个用户最多添加2个{type_label}账号，您已有{count}个"}), 400
+
     try:
         account = Account(
             name=data['name'],
@@ -823,6 +822,26 @@ def delete_account(account_id):
         return jsonify({"success": False, "message": f"删除失败: {e}"}), 500
 
 
+@app.route('/api/accounts/<int:account_id>/lift-restriction', methods=['POST'])
+@admin_required
+def lift_account_restriction(account_id):
+    """管理员手动解除账号限制"""
+    db = request.db
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        return jsonify({"success": False, "message": "账号不存在"}), 404
+    if account.status != 'restricted':
+        return jsonify({"success": False, "message": "该账号未被限制"}), 400
+    try:
+        account.status = 'active'
+        account.rate_limited_until = None
+        db.commit()
+        return jsonify({"success": True, "message": "限制已解除，账号恢复正常"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "message": f"操作失败: {e}"}), 500
+
+
 @app.route('/api/accounts/<int:account_id>/refresh-cookie', methods=['POST'])
 @login_required
 def refresh_account_cookie(account_id):
@@ -874,6 +893,16 @@ def upload_cookie():
             account.cookie_url = cookie_url
             account.cookie_status = 'valid'
         else:
+            # 非admin用户限制：每种类型最多2个账号
+            if user.role != 'admin':
+                count = db.query(Account).filter(
+                    Account.user_id == user.id,
+                    Account.account_type == data['account_type']
+                ).count()
+                type_label = "发送" if data['account_type'] == 'sender' else "监控"
+                if count >= 2:
+                    return jsonify({"success": False, "message": f"每个用户最多添加2个{type_label}账号，您已有{count}个"}), 400
+
             account = Account(
                 name=account_name,
                 account_type=data['account_type'],
@@ -1161,31 +1190,18 @@ def get_stats_report():
     except ValueError:
         return jsonify({"success": False, "message": "日期格式错误，请使用 YYYY-MM-DD"}), 400
 
-    # 按角色获取可查看的用户ID
-    if user.role == 'admin':
-        team_user_ids = None  # 不过滤
-    else:
-        team_user_ids = _get_team_user_ids(user, db)
-
-    # 帖子统计（按团队账号过滤）
+    # 帖子和反馈数据全员共享
+    # 帖子统计
     post_query = db.query(Post).filter(Post.created_at >= start_dt, Post.created_at <= end_dt)
-    if user.role != 'admin':
-        account_names = _get_team_account_names(user, db)
-        if account_names:
-            post_query = post_query.filter(Post.discovered_by.in_(account_names))
-        else:
-            post_query = post_query.filter(Post.id == -1)  # 无数据
 
     total_posts = post_query.count()
     target_posts = post_query.filter(Post.is_target == True).count()
 
-    # 反馈统计
+    # 反馈统计（全员可见）
     fb_query = db.query(PostFeedback).filter(
         PostFeedback.created_at >= start_dt,
         PostFeedback.created_at <= end_dt
     )
-    if team_user_ids is not None:
-        fb_query = fb_query.filter(PostFeedback.user_id.in_(team_user_ids))
 
     marked_target = fb_query.filter(PostFeedback.is_target_manual == True).count()
     contacted = fb_query.filter(PostFeedback.is_contacted == True).count()

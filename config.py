@@ -32,7 +32,7 @@ BAIDU_TRANSLATE_URL = "https://fanyi-api.baidu.com/api/trans/vip/translate"
 
 # ============ 发送配置 ============
 SEND_COOLDOWN_SECONDS = 600  # 每个发送账号任务间隔10分钟
-DAILY_SEND_LIMIT = 4  # 每个发送账号每天最多执行的发送任务数
+DAILY_SEND_LIMIT = 5  # 每个发送账号每天最多执行的发送任务数（按自然日计算）
 SEARCH_KEYWORD = "dropshipping"  # 搜索关键词
 
 

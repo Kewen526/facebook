@@ -258,10 +258,10 @@
                 <div class="tab" :class="{ active: activeTab === 'accounts' }" @click="activeTab = 'accounts'; loadAccounts()">账号管理</div>
                 <div class="tab" :class="{ active: activeTab === 'whatsapp' }" @click="activeTab = 'whatsapp'; loadWhatsApp()">WhatsApp</div>
                 <div class="tab" :class="{ active: activeTab === 'sending' }" @click="activeTab = 'sending'; loadSendingStatus()">发送控制</div>
-                <div class="tab" :class="{ active: activeTab === 'report' }" @click="activeTab = 'report'; loadReport()">统计报表</div>
-                <div class="tab" :class="{ active: activeTab === 'dashboard' }" @click="activeTab = 'dashboard'; loadDashboard()">统计面板</div>
-                <div class="tab" v-if="currentUser.role !== 'employee'" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'; loadUsers()">用户管理</div>
-                <div class="tab" :class="{ active: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">监控日志</div>
+                <div class="tab" v-if="currentUser.role === 'admin'" :class="{ active: activeTab === 'report' }" @click="activeTab = 'report'; loadReport()">统计报表</div>
+                <div class="tab" v-if="currentUser.role === 'admin'" :class="{ active: activeTab === 'dashboard' }" @click="activeTab = 'dashboard'; loadDashboard()">统计面板</div>
+                <div class="tab" v-if="currentUser.role === 'admin'" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'; loadUsers()">用户管理</div>
+                <div class="tab" v-if="currentUser.role === 'admin'" :class="{ active: activeTab === 'logs' }" @click="activeTab = 'logs'; loadLogs()">监控日志</div>
             </div>
 
             <!-- ====== 帖子列表 ====== -->
@@ -333,6 +333,17 @@
                             <span style="font-size:12px; color:#65676b; cursor:pointer;" @click="openPostDetail(post)">查看详情</span>
                         </div>
 
+                        <!-- 标记人信息 -->
+                        <div class="marker-info" v-if="(post.marked_target_by && post.marked_target_by.length) || (post.marked_contacted_by && post.marked_contacted_by.length)" style="padding:6px 12px; background:#f0f7ff; border-radius:6px; margin:4px 0; font-size:12px; color:#1a73e8;">
+                            <span v-if="post.marked_target_by && post.marked_target_by.length">
+                                <strong>标记目标客户：</strong><span v-for="(m, i) in post.marked_target_by" :key="'t'+i">{{ m.username }}<span v-if="i < post.marked_target_by.length - 1">、</span></span>
+                            </span>
+                            <span v-if="post.marked_target_by && post.marked_target_by.length && post.marked_contacted_by && post.marked_contacted_by.length" style="margin:0 8px;">|</span>
+                            <span v-if="post.marked_contacted_by && post.marked_contacted_by.length">
+                                <strong>标记已联系：</strong><span v-for="(m, i) in post.marked_contacted_by" :key="'c'+i">{{ m.username }}<span v-if="i < post.marked_contacted_by.length - 1">、</span></span>
+                            </span>
+                        </div>
+
                         <!-- 反馈按钮 -->
                         <div class="feedback-bar">
                             <button class="feedback-btn" :class="{ 'active-target': post.my_feedback && post.my_feedback.is_target_manual }" @click.stop="toggleFeedback(post, 'is_target_manual')">
@@ -393,7 +404,7 @@
                                 <td>{{ acc.name }}</td>
                                 <td><span class="badge" :class="acc.account_type === 'monitor' ? 'badge-source' : 'badge-target'">{{ acc.account_type === 'monitor' ? '监控' : '发送' }}</span></td>
                                 <td><span :style="{ color: acc.cookie_status === 'valid' ? '#42b72a' : '#fa3e3e' }">{{ acc.cookie_status }}</span></td>
-                                <td>{{ acc.status }}</td>
+                                <td><span :style="{ color: acc.status === 'restricted' ? '#fa3e3e' : acc.status === 'active' ? '#42b72a' : '#ff9800', fontWeight: acc.status === 'restricted' ? 'bold' : 'normal' }">{{ acc.status === 'restricted' ? '被限制' : acc.status }}</span></td>
                                 <td>{{ acc.owner_name || '-' }}</td>
                                 <td>
                                     <select v-if="acc.account_type === 'sender'" :value="acc.whatsapp_account_id || ''" @change="updateAccountWhatsApp(acc, $event.target.value)" style="padding:4px 8px; font-size:12px; border:1px solid #ddd; border-radius:4px;">
@@ -405,6 +416,7 @@
                                 <td><div class="toggle" :class="{ on: acc.enabled }" @click="toggleAccount(acc)"></div></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" @click="refreshCookie(acc.id)" style="margin-right:4px;">刷新Cookie</button>
+                                    <button v-if="acc.status === 'restricted' && currentUser.role === 'admin'" class="btn btn-sm" style="background:#ff9800; color:#fff; margin-right:4px;" @click="liftRestriction(acc.id)">解除限制</button>
                                     <button class="btn btn-sm btn-danger" @click="deleteAccount(acc.id)">删除</button>
                                 </td>
                             </tr>
@@ -1082,6 +1094,13 @@ createApp({
             loadAccounts();
         }
 
+        async function liftRestriction(id) {
+            if (!confirm('确定要解除该账号的发送限制吗？')) return;
+            const d = await fetchAPI('/api/accounts/' + id + '/lift-restriction', { method: 'POST' });
+            alert(d ? d.message : '操作失败');
+            loadAccounts();
+        }
+
         // WhatsApp
         async function createWhatsApp() {
             if (!newWhatsApp.value.phone_number) { alert('请填写WhatsApp号码'); return; }
@@ -1189,7 +1208,7 @@ createApp({
             loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks, loadReport, drillDownReport, retryTranslations, testTranslation,
             loadUsers, createUser, toggleUser, resetUserPassword, deleteUser,
             startMonitor, stopMonitor, startSending, stopSending, refreshData, openPostDetail,
-            createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie,
+            createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie, liftRestriction,
             createWhatsApp, deleteWhatsApp, toggleWhatsApp, getLinkedAccounts,
             toggleFeedback, showWhatsAppInput, submitWhatsApp, translatePost,
             roleLabel, sourceLabel, sourceColor, actionTypeLabel, taskTypeLabel, formatDate,
