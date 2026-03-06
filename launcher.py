@@ -78,7 +78,8 @@ class FacebookMonitorApp:
         self.root.configure(bg='#f0f2f5')
 
         # 状态
-        self.server_running = False
+        self.web_server_running = False  # Flask Web服务状态
+        self.monitor_running = False     # 监控+发送服务状态
         self.flask_thread = None
         self.logged_in = False
         self.current_user = None
@@ -188,14 +189,14 @@ class FacebookMonitorApp:
         row1 = tk.Frame(control_panel, bg='white')
         row1.pack(fill='x', pady=(0, 10))
 
-        tk.Label(row1, text="服务状态:", font=('Microsoft YaHei', 10),
+        tk.Label(row1, text="监控状态:", font=('Microsoft YaHei', 10),
                  bg='white', fg='#333').pack(side='left')
         self.lbl_server_status = tk.Label(row1, text="● 未启动",
                                            font=('Microsoft YaHei', 10, 'bold'),
                                            bg='white', fg='#fa3e3e')
         self.lbl_server_status.pack(side='left', padx=(5, 20))
 
-        tk.Label(row1, text=f"端口: {self.port}", font=('Microsoft YaHei', 9),
+        tk.Label(row1, text=f"管理端口: {self.port}", font=('Microsoft YaHei', 9),
                  bg='white', fg='#65676b').pack(side='left')
 
         # 浏览器显示选项
@@ -222,14 +223,14 @@ class FacebookMonitorApp:
         row3 = tk.Frame(control_panel, bg='white')
         row3.pack(fill='x', pady=(5, 0))
 
-        self.btn_start_server = tk.Button(row3, text="▶ 启动服务",
+        self.btn_start_server = tk.Button(row3, text="▶ 启动监控",
                                            font=('Microsoft YaHei', 11, 'bold'),
                                            bg='#42b72a', fg='white', relief='flat',
                                            cursor='hand2', width=14, height=1,
                                            command=self.start_server)
         self.btn_start_server.pack(side='left', padx=(0, 8), ipady=3)
 
-        self.btn_stop_server = tk.Button(row3, text="■ 停止服务",
+        self.btn_stop_server = tk.Button(row3, text="■ 停止监控",
                                           font=('Microsoft YaHei', 11, 'bold'),
                                           bg='#cccccc', fg='white', relief='flat',
                                           width=14, height=1, state='disabled',
@@ -313,6 +314,9 @@ class FacebookMonitorApp:
                     text=f"当前用户: {user.username} ({role_map.get(user.role, user.role)})")
                 self.show_main()
                 logger.info(f"用户 {user.username} 登录成功")
+
+                # 登录成功后自动启动Web服务
+                self._auto_start_web_server()
             finally:
                 session.close()
         except Exception as e:
@@ -321,8 +325,8 @@ class FacebookMonitorApp:
         self.btn_login.config(state='normal', text="登  录")
 
     def do_logout(self):
-        if self.server_running:
-            if not messagebox.askyesno("确认", "服务正在运行中，退出登录会停止服务。\n确定要退出吗？"):
+        if self.monitor_running:
+            if not messagebox.askyesno("确认", "监控服务正在运行中，退出登录会停止服务。\n确定要退出吗？"):
                 return
             self.stop_server()
 
@@ -340,13 +344,11 @@ class FacebookMonitorApp:
         mode = "隐藏" if headless else "显示"
         logger.info(f"浏览器窗口设置为: {mode}（下次启动浏览器实例时生效）")
 
-    # ========== 服务控制 ==========
-    def start_server(self):
-        if self.server_running:
+    # ========== Web服务（登录后自动启动） ==========
+    def _auto_start_web_server(self):
+        """登录成功后自动启动Flask Web服务"""
+        if self.web_server_running:
             return
-
-        self.btn_start_server.config(state='disabled', bg='#cccccc')
-        self.root.update()
 
         # 应用headless设置
         self.on_browser_mode_change()
@@ -359,57 +361,79 @@ class FacebookMonitorApp:
                 init_db()
                 start_auto_translate()
 
-                logger.info(f"正在启动Web服务，端口: {self.port}")
-                logger.info(f"访问 http://localhost:{self.port}")
+                logger.info(f"Web管理服务已启动，端口: {self.port}")
 
-                # 更新UI状态
-                self.root.after(0, self._on_server_started)
+                self.web_server_running = True
+                # 登录后"打开管理页面"按钮立即可用
+                self.root.after(0, lambda: self.btn_open_web.config(state='normal', cursor='hand2'))
 
                 app.run(host='0.0.0.0', port=self.port, debug=False, threaded=True,
                         use_reloader=False)
             except Exception as e:
-                logger.error(f"服务启动失败: {e}")
-                self.root.after(0, self._on_server_stopped)
+                logger.error(f"Web服务启动失败: {e}")
 
         self.flask_thread = threading.Thread(target=_run_flask, daemon=True)
         self.flask_thread.start()
 
-    def _on_server_started(self):
-        self.server_running = True
+    # ========== 监控+发送服务控制 ==========
+    def start_server(self):
+        """启动监控线程和发送任务处理器"""
+        if self.monitor_running:
+            return
+
+        self.btn_start_server.config(state='disabled', bg='#cccccc')
+        self.root.update()
+
+        # 应用headless设置
+        self.on_browser_mode_change()
+
+        try:
+            from monitor import start_monitor_thread
+            from task_queue import start_task_processor
+
+            start_monitor_thread()
+            logger.info("监控线程已启动")
+
+            start_task_processor()
+            logger.info("发送任务处理器已启动")
+
+            self._on_service_started()
+        except Exception as e:
+            logger.error(f"启动监控/发送失败: {e}")
+            self.btn_start_server.config(state='normal', bg='#42b72a', cursor='hand2')
+
+    def _on_service_started(self):
+        self.monitor_running = True
         self.lbl_server_status.config(text="● 运行中", fg='#42b72a')
         self.btn_start_server.config(state='disabled', bg='#cccccc')
         self.btn_stop_server.config(state='normal', bg='#fa3e3e', cursor='hand2')
-        self.btn_open_web.config(state='normal', cursor='hand2')
 
-    def _on_server_stopped(self):
-        self.server_running = False
+    def _on_service_stopped(self):
+        self.monitor_running = False
         self.lbl_server_status.config(text="● 已停止", fg='#fa3e3e')
         self.btn_start_server.config(state='normal', bg='#42b72a', cursor='hand2')
         self.btn_stop_server.config(state='disabled', bg='#cccccc', cursor='arrow')
-        self.btn_open_web.config(state='disabled', cursor='arrow')
 
     def stop_server(self):
-        if not self.server_running:
+        """停止监控和发送任务"""
+        if not self.monitor_running:
             return
-        logger.info("正在停止服务...")
+        logger.info("正在停止监控和发送...")
         try:
-            # 停止监控和发送
-            try:
-                from monitor import stop_monitor
-                stop_monitor()
-            except Exception:
-                pass
-            try:
-                from task_queue import stop_task_processor
-                stop_task_processor()
-            except Exception:
-                pass
-
-            # Flask在daemon线程中，主程序退出时自动停止
-            self._on_server_stopped()
-            logger.info("服务已停止（浏览器实例需手动关闭或等待自动关闭）")
+            from monitor import stop_monitor
+            stop_monitor()
+            logger.info("监控已停止")
         except Exception as e:
-            logger.error(f"停止服务出错: {e}")
+            logger.error(f"停止监控出错: {e}")
+        try:
+            from task_queue import stop_task_processor
+            stop_task_processor()
+            logger.info("发送任务处理器已停止")
+        except Exception as e:
+            logger.error(f"停止发送出错: {e}")
+
+        self._on_service_stopped()
+        logger.info("所有监控和发送服务已停止")
 
     def open_web_panel(self):
         url = f"http://localhost:{self.port}"
@@ -418,8 +442,8 @@ class FacebookMonitorApp:
 
     # ========== 退出 ==========
     def on_close(self):
-        if self.server_running:
-            if not messagebox.askyesno("确认退出", "服务正在运行中，关闭窗口会停止所有任务。\n确定要退出吗？"):
+        if self.monitor_running:
+            if not messagebox.askyesno("确认退出", "监控服务正在运行中，关闭窗口会停止所有任务。\n确定要退出吗？"):
                 return
             self.stop_server()
         self.root.destroy()
