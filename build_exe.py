@@ -27,7 +27,7 @@ def build():
         'pyinstaller',
         '--name=FacebookMonitor',
         '--onedir',           # 打包为目录（比onefile启动更快）
-        '--console',          # 显示控制台窗口（方便查看日志）
+        '--windowed',         # GUI模式，不显示黑色控制台窗口
         '--noconfirm',        # 覆盖已有输出
 
         # 添加数据文件
@@ -49,8 +49,7 @@ def build():
         '--hidden-import=selenium.webdriver.support.ui',
         '--hidden-import=selenium.webdriver.support.expected_conditions',
 
-        # 排除不需要的大型包（减小体积）
-        '--exclude-module=tkinter',
+        # 排除不需要的大型包（减小体积，但保留tkinter）
         '--exclude-module=matplotlib',
         '--exclude-module=numpy',
         '--exclude-module=scipy',
@@ -61,9 +60,9 @@ def build():
     ]
 
     print("=" * 50)
-    print("开始打包 Facebook 监控系统")
+    print("开始打包 Facebook 监控系统（GUI版本）")
     print("=" * 50)
-    print(f"入口: launcher.py")
+    print(f"入口: launcher.py (tkinter GUI)")
     print(f"输出: dist/FacebookMonitor/")
     print()
 
@@ -79,11 +78,13 @@ def build():
         print("使用方法:")
         print(f"  1. 进入 {dist_path}")
         print(f"  2. 双击 FacebookMonitor.exe 启动")
-        print(f"  3. 浏览器会自动打开登录页面")
+        print(f"  3. 弹出图形化登录窗口")
+        print(f"  4. 登录后可以:")
+        print(f"     - 选择是否显示浏览器窗口")
+        print(f"     - 点击「启动服务」开始监控")
+        print(f"     - 点击「打开管理页面」在浏览器中查看")
         print()
-        print("命令行参数:")
-        print("  FacebookMonitor.exe --no-browser  # 不自动打开浏览器")
-        print("  FacebookMonitor.exe --port 9090   # 使用自定义端口")
+        print("注意: 用户电脑需要安装 Chrome 浏览器")
         print("=" * 50)
     else:
         print()
