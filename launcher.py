@@ -11,6 +11,30 @@ import webbrowser
 import logging
 import json
 
+# ===== PyInstaller 打包依赖声明 =====
+# 以下导入仅用于让 PyInstaller 正确检测并打包所有依赖
+# 不要删除这些导入，即使IDE提示"未使用"
+try:
+    import sqlalchemy
+    import sqlalchemy.dialects.mysql
+    import pymysql
+    import flask
+    import flask_socketio
+    import requests
+    import selenium
+    import selenium.webdriver
+    import selenium.webdriver.chrome
+    import selenium.webdriver.chrome.service
+    import selenium.webdriver.chrome.options
+    import selenium.webdriver.common.by
+    import selenium.webdriver.common.keys
+    import selenium.webdriver.support.ui
+    import selenium.webdriver.support.expected_conditions
+    import engineio.async_drivers.threading
+except ImportError as _e:
+    pass  # 运行时实际导入由各模块自行处理
+# ===== 依赖声明结束 =====
+
 # 兼容PyInstaller打包
 def get_base_path():
     if getattr(sys, 'frozen', False):
