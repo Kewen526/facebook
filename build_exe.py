@@ -34,9 +34,24 @@ def build():
         f'--add-data={os.path.join(base_dir, "templates")}' + os.pathsep + 'templates',
         f'--add-data={os.path.join(base_dir, "config.py")}' + os.pathsep + '.',
 
+        # 强制收集完整包（确保所有子模块都被打包）
+        '--collect-all=sqlalchemy',
+        '--collect-all=pymysql',
+        '--collect-all=flask',
+        '--collect-all=flask_socketio',
+        '--collect-all=jinja2',
+        '--collect-all=markupsafe',
+        '--collect-all=engineio',
+
         # 隐式导入（PyInstaller可能检测不到的模块）
+        '--hidden-import=sqlalchemy',
+        '--hidden-import=sqlalchemy.orm',
+        '--hidden-import=sqlalchemy.pool',
+        '--hidden-import=sqlalchemy.engine',
         '--hidden-import=sqlalchemy.dialects.mysql',
+        '--hidden-import=sqlalchemy.dialects.mysql.pymysql',
         '--hidden-import=pymysql',
+        '--hidden-import=pymysql.cursors',
         '--hidden-import=flask_socketio',
         '--hidden-import=eventlet',
         '--hidden-import=engineio.async_drivers.threading',
