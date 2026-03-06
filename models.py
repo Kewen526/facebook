@@ -355,25 +355,27 @@ def init_db():
 
 def _migrate_users_table():
     """检查并补齐users表的新增列"""
-    from sqlalchemy import inspect, text
-    insp = inspect(engine)
-    if 'users' not in insp.get_table_names():
-        return
-    existing = {col['name'] for col in insp.get_columns('users')}
-    migrations = []
-    if 'parent_id' not in existing:
-        migrations.append("ALTER TABLE users ADD COLUMN parent_id INT NULL")
-    if 'enabled' not in existing:
-        migrations.append("ALTER TABLE users ADD COLUMN enabled TINYINT(1) DEFAULT 1")
-    if 'updated_at' not in existing:
-        migrations.append("ALTER TABLE users ADD COLUMN updated_at DATETIME NULL")
-    if migrations:
-        with engine.connect() as conn:
-            for sql in migrations:
-                print(f"数据库迁移: {sql}")
-                conn.execute(text(sql))
-            conn.commit()
-        print("users表列补齐完成")
+    try:
+        from sqlalchemy import inspect, text
+        insp = inspect(engine)
+        if 'users' not in insp.get_table_names():
+            return
+        existing = {col['name'] for col in insp.get_columns('users')}
+        migrations = []
+        if 'parent_id' not in existing:
+            migrations.append("ALTER TABLE users ADD COLUMN parent_id INT NULL")
+        if 'enabled' not in existing:
+            migrations.append("ALTER TABLE users ADD COLUMN enabled TINYINT(1) DEFAULT 1")
+        if 'updated_at' not in existing:
+            migrations.append("ALTER TABLE users ADD COLUMN updated_at DATETIME NULL")
+        if migrations:
+            with engine.begin() as conn:
+                for sql in migrations:
+                    print(f"数据库迁移: {sql}")
+                    conn.execute(text(sql))
+            print("users表列补齐完成")
+    except Exception as e:
+        print(f"数据库迁移检查失败（可忽略如果表结构已正确）: {e}")
 
 
 def _ensure_admin():
