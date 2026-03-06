@@ -11,28 +11,20 @@ import webbrowser
 import logging
 import json
 
-# ===== PyInstaller 打包依赖声明 =====
-# 以下导入仅用于让 PyInstaller 正确检测并打包所有依赖
-# 不要删除这些导入，即使IDE提示"未使用"
-try:
-    import sqlalchemy
-    import sqlalchemy.dialects.mysql
-    import pymysql
-    import flask
-    import flask_socketio
-    import requests
-    import selenium
-    import selenium.webdriver
-    import selenium.webdriver.chrome
-    import selenium.webdriver.chrome.service
-    import selenium.webdriver.chrome.options
-    import selenium.webdriver.common.by
-    import selenium.webdriver.common.keys
-    import selenium.webdriver.support.ui
-    import selenium.webdriver.support.expected_conditions
-    import engineio.async_drivers.threading
-except ImportError as _e:
-    pass  # 运行时实际导入由各模块自行处理
+# ===== PyInstaller 打包依赖声明（不要用try/except包裹！）=====
+# 以下导入确保 PyInstaller 能检测并打包所有依赖
+import sqlalchemy  # noqa: F401
+import sqlalchemy.orm  # noqa: F401
+import sqlalchemy.pool  # noqa: F401
+import sqlalchemy.dialects.mysql  # noqa: F401
+import sqlalchemy.engine  # noqa: F401
+import pymysql  # noqa: F401
+import flask  # noqa: F401
+import flask_socketio  # noqa: F401
+import requests  # noqa: F401
+import jinja2  # noqa: F401
+import markupsafe  # noqa: F401
+import engineio.async_drivers.threading  # noqa: F401
 # ===== 依赖声明结束 =====
 
 # 兼容PyInstaller打包
