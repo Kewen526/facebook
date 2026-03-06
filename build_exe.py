@@ -13,9 +13,15 @@ import subprocess
 
 
 def build():
-    # 确保PyInstaller已安装
+    # 显示当前Python信息
+    print(f"当前 Python: {sys.executable}")
+    print(f"Python 版本: {sys.version}")
+    print()
+
+    # 确保PyInstaller已安装（在当前Python环境中）
     try:
         import PyInstaller
+        print(f"PyInstaller 版本: {PyInstaller.__version__}")
     except ImportError:
         print("正在安装 PyInstaller...")
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pyinstaller'])
@@ -32,38 +38,20 @@ def build():
             print(f"  [MISSING] {mod_name}")
     if missing:
         print(f"\n错误: 以下依赖未安装: {', '.join(missing)}")
-        print(f"请先运行: pip install {' '.join(missing)}")
+        print(f"请先运行: {sys.executable} -m pip install {' '.join(missing)}")
         sys.exit(1)
-
-    # 获取site-packages路径（确保PyInstaller能找到所有包）
-    import site
-    site_packages = []
-    for p in site.getsitepackages() + [site.getusersitepackages()]:
-        if os.path.isdir(p):
-            site_packages.append(p)
-    # 同时获取当前Python的lib路径
-    for p in sys.path:
-        if 'site-packages' in p and os.path.isdir(p) and p not in site_packages:
-            site_packages.append(p)
-
-    print(f"\n检测到 site-packages 路径:")
-    for p in site_packages:
-        print(f"  {p}")
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # PyInstaller参数
+    # 使用 sys.executable -m PyInstaller 确保用当前Python环境的PyInstaller
+    # 这样可以避免多个Python版本共存时调用错误版本的问题
     args = [
-        'pyinstaller',
+        sys.executable, '-m', 'PyInstaller',
         '--name=FacebookMonitor',
         '--onedir',           # 打包为目录（比onefile启动更快）
         '--windowed',         # GUI模式，不显示黑色控制台窗口
         '--noconfirm',        # 覆盖已有输出
     ]
-
-    # 添加所有site-packages路径，确保PyInstaller能找到已安装的包
-    for sp in site_packages:
-        args.append(f'--paths={sp}')
 
     # 同时添加项目目录本身
     args.append(f'--paths={base_dir}')
