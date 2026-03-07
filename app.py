@@ -313,7 +313,8 @@ def get_status():
 def start_monitoring():
     if monitor_status.get("running"):
         return jsonify({"success": False, "message": "监控已在运行中"})
-    success = start_monitor_thread()
+    user_id = request.current_user.id
+    success = start_monitor_thread(user_id=user_id)
     return jsonify({"success": success, "message": "监控已启动" if success else "启动失败"})
 
 
@@ -1026,7 +1027,8 @@ def start_sending():
         return jsonify({"success": False, "message": "发送已在运行中"})
     try:
         from task_queue import start_task_processor
-        start_task_processor()
+        user_id = request.current_user.id
+        start_task_processor(user_id=user_id)
         sending_status["running"] = True
         return jsonify({"success": True, "message": "发送已启动"})
     except Exception as e:

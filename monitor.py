@@ -1104,7 +1104,7 @@ def interact_and_save_post(analyzed_data, driver, account_name=None):
         if is_target:
             try:
                 from task_queue import generate_tasks_for_post
-                generate_tasks_for_post(saved)
+                generate_tasks_for_post(saved, monitor_account_name=account_name)
                 logger.info(f"帖子 {post_id} 的发送任务已生成")
             except Exception as e:
                 logger.warning(f"生成发送任务失败: {e}")
@@ -1419,17 +1419,24 @@ def start_monitor_for_account(account_name, cookie_url):
                 pass
 
 
-def start_monitor():
-    """启动监控主循环（兼容旧的单账号模式，同时支持多账号）"""
+def start_monitor(user_id=None):
+    """启动监控主循环（兼容旧的单账号模式，同时支持多账号）
+
+    Args:
+        user_id: 当前登录用户ID，只启动该用户自己添加的监控账号
+    """
     update_status(running=True, error="")
 
     # 查询数据库中已启用的monitor账号
     session = get_session()
     try:
-        monitor_accounts = session.query(Account).filter(
+        query = session.query(Account).filter(
             Account.account_type == 'monitor',
             Account.enabled == True
-        ).all()
+        )
+        if user_id is not None:
+            query = query.filter(Account.user_id == user_id)
+        monitor_accounts = query.all()
         accounts_list = [(a.name, a.cookie_url) for a in monitor_accounts if a.cookie_url]
     finally:
         session.close()
@@ -1459,13 +1466,17 @@ def start_monitor():
         start_monitor_for_account("default", COOKIE_URL)
 
 
-def start_monitor_thread():
-    """在后台线程中启动监控"""
+def start_monitor_thread(user_id=None):
+    """在后台线程中启动监控
+
+    Args:
+        user_id: 当前登录用户ID，只启动该用户自己添加的监控账号
+    """
     if monitor_status["running"]:
         logger.warning("监控已在运行中")
         return False
 
-    thread = threading.Thread(target=start_monitor, daemon=True)
+    thread = threading.Thread(target=start_monitor, args=(user_id,), daemon=True)
     thread.start()
     return True
 
