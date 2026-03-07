@@ -396,10 +396,11 @@ class FacebookMonitorApp:
                 from monitor import start_monitor_thread
                 from task_queue import start_task_processor
 
-                start_monitor_thread()
+                user_id = self.current_user['id'] if self.current_user else None
+                start_monitor_thread(user_id=user_id)
                 logger.info("监控线程已启动")
 
-                start_task_processor()
+                start_task_processor(user_id=user_id)
                 logger.info("发送任务处理器已启动")
 
                 self.root.after(0, self._on_service_started)

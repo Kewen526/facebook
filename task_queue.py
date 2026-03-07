@@ -6,9 +6,10 @@ import logging
 import threading
 from datetime import datetime, timezone, timedelta
 
+from sqlalchemy import func
 from config import SEND_COOLDOWN_SECONDS, DAILY_SEND_LIMIT
 from models import get_session, Account, SendTask, PostAction, WhatsAppAccount, Post
-from ai_analyzer import generate_comment, generate_dm_with_whatsapp, generate_dm_without_whatsapp
+from ai_analyzer import generate_comment, generate_dm_with_whatsapp, generate_dm_without_whatsapp, analyze_post
 from sender import SenderEngine
 
 logger = logging.getLogger(__name__)
@@ -20,8 +21,13 @@ _sender_engines = {}  # account_id -> SenderEngine
 _sender_status = {}  # account_id -> {状态信息}
 
 
-def generate_tasks_for_post(post_data):
-    """为目标帖子生成发送任务（全覆盖：每个sender账号都要触达）"""
+def generate_tasks_for_post(post_data, monitor_account_name=None):
+    """为目标帖子生成发送任务（只为同一用户的sender账号生成）
+
+    Args:
+        post_data: 帖子数据
+        monitor_account_name: 发现该帖子的监控账号名称，用于查找所属用户
+    """
     session = get_session()
     try:
         # 获取帖子的数据库ID
@@ -35,11 +41,21 @@ def generate_tasks_for_post(post_data):
                 logger.warning(f"找不到帖子: {post_data.get('post_id')}")
                 return
 
-        # 获取所有已启用的sender账号
-        sender_accounts = session.query(Account).filter(
+        # 查找监控账号所属的用户，只为该用户的sender账号生成任务
+        query = session.query(Account).filter(
             Account.account_type == 'sender',
             Account.enabled == True
-        ).all()
+        )
+        if monitor_account_name:
+            monitor_account = session.query(Account).filter(
+                Account.name == monitor_account_name,
+                Account.account_type == 'monitor'
+            ).first()
+            if monitor_account and monitor_account.user_id:
+                query = query.filter(Account.user_id == monitor_account.user_id)
+                logger.info(f"为用户 {monitor_account.user_id} 的sender账号生成任务")
+
+        sender_accounts = query.all()
 
         if not sender_accounts:
             logger.info("没有可用的发送账号，跳过任务生成")
@@ -84,15 +100,15 @@ def get_next_task(account_id):
         if not account:
             return None
 
-        # 检查每日发送上限
+        # 检查每日发送上限（按不同帖子数量计算，一个帖子=一组任务：评论+私信+加好友）
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        daily_count = session.query(SendTask).filter(
+        daily_post_count = session.query(func.count(func.distinct(SendTask.post_id))).filter(
             SendTask.account_id == account_id,
             SendTask.status == 'completed',
             SendTask.completed_at >= today_start
-        ).count()
-        if daily_count >= DAILY_SEND_LIMIT:
-            logger.debug(f"[{account.name}] 今日已完成 {daily_count} 个任务，达到上限 {DAILY_SEND_LIMIT}，跳过")
+        ).scalar() or 0
+        if daily_post_count >= DAILY_SEND_LIMIT:
+            logger.debug(f"[{account.name}] 今日已触达 {daily_post_count} 个客户，达到上限 {DAILY_SEND_LIMIT}，跳过")
             return None
 
         # 检查是否被限制（需人工解除，不再自动恢复）
@@ -111,11 +127,11 @@ def get_next_task(account_id):
                 logger.debug(f"[{account.name}] 冷却中，还需等待 {remaining:.0f}s")
                 return None
 
-        # 获取最早的pending任务
+        # 获取最新的pending任务（优先处理最新抓取的帖子，最快触达客户）
         task = session.query(SendTask).filter(
             SendTask.account_id == account_id,
             SendTask.status == 'pending'
-        ).order_by(SendTask.created_at.asc()).first()
+        ).order_by(SendTask.created_at.desc()).first()
 
         if task:
             return {
@@ -158,6 +174,32 @@ def execute_task(task_info, sender_engine):
             task.completed_at = datetime.now(timezone.utc)
             session.commit()
             return
+
+        # AI二次确认：在执行该帖子的第一个任务时，重新判断是否为目标客户
+        # 检查该帖子+该账号是否已有完成的任务（如果有说明已通过二次确认）
+        has_completed = session.query(SendTask).filter(
+            SendTask.post_id == post_id,
+            SendTask.account_id == account_id,
+            SendTask.status == 'completed'
+        ).first()
+        if not has_completed and post.content:
+            logger.info(f"[{account_name}] 帖子 {post_id} 执行AI二次确认...")
+            is_target, ai_response = analyze_post(post.content)
+            if not is_target:
+                logger.info(f"[{account_name}] 帖子 {post_id} AI二次确认判定为非目标客户，跳过该帖子所有任务")
+                # 将该帖子+该账号的所有pending任务标记为skipped
+                pending_tasks = session.query(SendTask).filter(
+                    SendTask.post_id == post_id,
+                    SendTask.account_id == account_id,
+                    SendTask.status.in_(['pending', 'in_progress'])
+                ).all()
+                for t in pending_tasks:
+                    t.status = 'skipped'
+                    t.error_message = 'AI二次确认：非目标客户'
+                    t.completed_at = datetime.now(timezone.utc)
+                session.commit()
+                return
+            logger.info(f"[{account_name}] 帖子 {post_id} AI二次确认通过，继续执行任务")
 
         success = False
         detail = ""
@@ -379,21 +421,28 @@ def _run_sender_for_account(account_id, account_name, cookie_url):
 _sender_threads = {}
 
 
-def run_task_processor():
-    """发送任务处理主循环 - 为每个sender账号启动独立线程"""
+def run_task_processor(user_id=None):
+    """发送任务处理主循环 - 为每个sender账号启动独立线程
+
+    Args:
+        user_id: 当前登录用户ID，只启动该用户自己添加的发送账号
+    """
     global _task_processor_running
     _task_processor_running = True
 
     logger.info("发送任务处理器已启动")
 
-    # 获取所有已启用的sender账号
+    # 获取已启用的sender账号（按用户过滤）
     session = get_session()
     try:
-        sender_accounts = session.query(Account).filter(
+        query = session.query(Account).filter(
             Account.account_type == 'sender',
             Account.enabled == True,
             Account.status.notin_(['banned', 'restricted'])
-        ).all()
+        )
+        if user_id is not None:
+            query = query.filter(Account.user_id == user_id)
+        sender_accounts = query.all()
         accounts_info = [(a.id, a.name, a.cookie_url) for a in sender_accounts if a.cookie_url]
     finally:
         session.close()
@@ -432,15 +481,19 @@ def run_task_processor():
     logger.info("发送任务处理器已停止")
 
 
-def start_task_processor():
-    """启动任务处理器线程"""
+def start_task_processor(user_id=None):
+    """启动任务处理器线程
+
+    Args:
+        user_id: 当前登录用户ID，只启动该用户自己添加的发送账号
+    """
     global _task_processor_thread, _task_processor_running
 
     if _task_processor_running and _task_processor_thread and _task_processor_thread.is_alive():
         logger.warning("任务处理器已在运行中")
         return
 
-    _task_processor_thread = threading.Thread(target=run_task_processor, daemon=True)
+    _task_processor_thread = threading.Thread(target=run_task_processor, args=(user_id,), daemon=True)
     _task_processor_thread.start()
     logger.info("任务处理器线程已启动")
 
