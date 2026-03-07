@@ -43,6 +43,21 @@ def build():
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
+    # 查找 VC++ 运行库 DLL，打包进去以便目标电脑无需额外安装
+    vc_dlls = []
+    python_dir = os.path.dirname(sys.executable)
+    for dll_name in ['vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll']:
+        # 优先从 Python 安装目录查找
+        dll_path = os.path.join(python_dir, dll_name)
+        if not os.path.exists(dll_path):
+            # 也在 System32 中查找
+            dll_path = os.path.join(os.environ.get('SYSTEMROOT', r'C:\Windows'), 'System32', dll_name)
+        if os.path.exists(dll_path):
+            vc_dlls.append(dll_path)
+            print(f"  [DLL] 找到 {dll_name}: {dll_path}")
+        else:
+            print(f"  [DLL] 未找到 {dll_name}（可能不影响）")
+
     # 使用 sys.executable -m PyInstaller 确保用当前Python环境的PyInstaller
     # 这样可以避免多个Python版本共存时调用错误版本的问题
     args = [
@@ -52,6 +67,10 @@ def build():
         '--windowed',         # GUI模式，不显示黑色控制台窗口
         '--noconfirm',        # 覆盖已有输出
     ]
+
+    # 将 VC++ 运行库 DLL 添加为二进制文件
+    for dll_path in vc_dlls:
+        args.append(f'--add-binary={dll_path}' + os.pathsep + '.')
 
     # 同时添加项目目录本身
     args.append(f'--paths={base_dir}')
