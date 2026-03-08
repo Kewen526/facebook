@@ -55,11 +55,32 @@ def run_migration():
         ),
     ]
 
+    # 3. 创建 post_publishes 表（自动发帖记录）
+    migrations.append((
+        "post_publishes",
+        """CREATE TABLE IF NOT EXISTS post_publishes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            account_id INT NOT NULL,
+            content TEXT NOT NULL,
+            status VARCHAR(32) DEFAULT 'pending',
+            publish_date DATE NOT NULL,
+            error_message TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE INDEX idx_publish_account_date (account_id, publish_date),
+            INDEX idx_publish_status (status),
+            FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"""
+    ))
+
     # 需要添加的列（ALTER TABLE）
     alter_columns = [
         # (表名, 列名, 列定义)
         ("posts", "content_zh", "TEXT DEFAULT NULL COMMENT '中文翻译'"),
         ("accounts", "user_id", "INT DEFAULT NULL COMMENT '所属用户ID'"),
+        ("accounts", "unread_count", "INT DEFAULT 0 COMMENT 'Messenger未读消息数'"),
+        ("accounts", "unread_updated_at", "DATETIME DEFAULT NULL COMMENT '最近检测未读时间'"),
+        ("accounts", "unread_cleared_at", "DATETIME DEFAULT NULL COMMENT '最近清零时间'"),
     ]
 
     # 执行建表

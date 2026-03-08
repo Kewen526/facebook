@@ -67,6 +67,78 @@ def update_account_status(account_name, **kwargs):
     monitor_status["accounts"][account_name].update(kwargs)
 
 
+def detect_messenger_unread(driver, account_name):
+    """检测Facebook页面上Messenger图标的未读消息角标数字
+
+    Args:
+        driver: Selenium WebDriver实例
+        account_name: 账号名称
+
+    Returns:
+        int: 未读消息数，检测失败返回-1
+    """
+    try:
+        # Messenger图标旁的红色角标数字
+        badge_selectors = [
+            # aria-label包含Messenger的链接上的角标
+            "//a[contains(@aria-label, 'Messenger')]//span[contains(@class, 'x1b0d499')]",
+            "//a[contains(@aria-label, 'Messenger')]//span[@data-visualcompletion='ignore']//span",
+            # 导航栏中Messenger图标的角标计数
+            "//div[@role='navigation']//a[contains(@href, 'messenger')]//span[contains(@class, 'x1b0d499')]",
+            # 通用角标: Messenger按钮上的数字指示
+            "//a[contains(@aria-label, 'Messenger') or contains(@aria-label, '即时通讯') or contains(@aria-label, 'Chat')]//span[@class and string-length(text()) > 0 and string-length(text()) < 4]",
+            # Facebook顶栏中的角标
+            "//div[@role='banner']//a[contains(@href, '/messaging') or contains(@href, 'messenger')]//span[string-length(text()) > 0 and string-length(text()) < 4]",
+        ]
+
+        for selector in badge_selectors:
+            try:
+                elements = driver.find_elements(By.XPATH, selector)
+                for elem in elements:
+                    if elem.is_displayed():
+                        text = elem.text.strip()
+                        if text and text.isdigit():
+                            count = int(text)
+                            logger.info(f"[{account_name}] 检测到Messenger未读消息: {count}")
+                            return count
+                        elif text and '+' in text:
+                            # 处理 "99+" 这种格式
+                            num_part = text.replace('+', '').strip()
+                            if num_part.isdigit():
+                                count = int(num_part)
+                                logger.info(f"[{account_name}] 检测到Messenger未读消息: {count}+")
+                                return count
+            except Exception:
+                continue
+
+        # 没有找到角标，说明没有未读消息
+        logger.debug(f"[{account_name}] 未检测到Messenger未读角标")
+        return 0
+
+    except Exception as e:
+        logger.warning(f"[{account_name}] 检测Messenger未读失败: {e}")
+        return -1
+
+
+def update_account_unread(account_name, unread_count):
+    """更新账号的未读消息数到数据库"""
+    if unread_count < 0:
+        return  # 检测失败，不更新
+    session = get_session()
+    try:
+        account = session.query(Account).filter(Account.name == account_name).first()
+        if account:
+            account.unread_count = unread_count
+            account.unread_updated_at = datetime.now(timezone.utc)
+            session.commit()
+            logger.debug(f"[{account_name}] 已更新未读消息数: {unread_count}")
+    except Exception as e:
+        session.rollback()
+        logger.warning(f"[{account_name}] 更新未读消息数失败: {e}")
+    finally:
+        session.close()
+
+
 def download_cookies(cookie_url=None, account_name=None):
     """从URL下载cookie文件"""
     url = cookie_url or COOKIE_URL
@@ -1308,6 +1380,14 @@ def _monitor_page_loop(driver, page_config, tab_index, account_name, page_label_
         try:
             # 检查并关闭遮罩层
             dismiss_overlay(driver)
+
+            # 每5轮检测一次Messenger未读消息（仅首页浏览器，因为首页能看到Messenger图标）
+            if page_name == 'home' and round_count % 5 == 1:
+                try:
+                    unread = detect_messenger_unread(driver, account_name)
+                    update_account_unread(account_name, unread)
+                except Exception as ue:
+                    logger.debug(f"{thread_label} 检测未读消息异常: {ue}")
 
             logger.info(f"{thread_label} 开始监控: {page_label}")
             new_posts = monitor_single_page(driver, page_config, tab_index, account_name=account_name)
