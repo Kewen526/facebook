@@ -258,6 +258,8 @@
                 <div class="tab" :class="{ active: activeTab === 'accounts' }" @click="activeTab = 'accounts'; loadAccounts()">账号管理</div>
                 <div class="tab" :class="{ active: activeTab === 'whatsapp' }" @click="activeTab = 'whatsapp'; loadWhatsApp()">WhatsApp</div>
                 <div class="tab" :class="{ active: activeTab === 'sending' }" @click="activeTab = 'sending'; loadSendingStatus()">发送控制</div>
+                <div class="tab" :class="{ active: activeTab === 'publish' }" @click="activeTab = 'publish'; loadPublishStatus()">自动发帖</div>
+                <div class="tab" :class="{ active: activeTab === 'unread' }" @click="activeTab = 'unread'; loadUnread()">未读消息</div>
                 <div class="tab" v-if="currentUser.role === 'admin'" :class="{ active: activeTab === 'report' }" @click="activeTab = 'report'; loadReport()">统计报表</div>
                 <div class="tab" v-if="currentUser.role === 'admin'" :class="{ active: activeTab === 'dashboard' }" @click="activeTab = 'dashboard'; loadDashboard()">统计面板</div>
                 <div class="tab" v-if="currentUser.role === 'admin'" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'; loadUsers()">用户管理</div>
@@ -531,6 +533,130 @@
                 </div>
             </div>
 
+            <!-- ====== 自动发帖 ====== -->
+            <div v-if="activeTab === 'publish'">
+                <div class="mgmt-card">
+                    <h3>
+                        自动发帖
+                        <span>
+                            <button class="btn btn-start btn-sm" v-if="!publishData.running" @click="startPublish()">开始发帖</button>
+                            <button class="btn btn-stop btn-sm" v-else @click="stopPublish()">停止发帖</button>
+                        </span>
+                    </h3>
+                    <p style="font-size:13px; color:#65676b; margin-bottom:16px;">每个发送账号每天自动发布一篇AI生成的推广帖子。点击"开始发帖"后系统会逐个账号检查并发帖。</p>
+
+                    <table class="mgmt-table">
+                        <thead>
+                            <tr>
+                                <th>账号名称</th>
+                                <th>今日状态</th>
+                                <th>内容预览</th>
+                                <th>发布时间</th>
+                                <th>错误信息</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="acc in publishData.accounts || []" :key="acc.account_id">
+                                <td>{{ acc.account_name }}</td>
+                                <td>
+                                    <span v-if="acc.today_status === 'success'" style="color:#42b72a; font-weight:600;">已发布</span>
+                                    <span v-else-if="acc.today_status === 'publishing'" style="color:#f7b928; font-weight:600;">发布中...</span>
+                                    <span v-else-if="acc.today_status === 'failed'" style="color:#fa3e3e; font-weight:600;">失败</span>
+                                    <span v-else-if="acc.today_status === 'pending'" style="color:#f7b928;">待发布</span>
+                                    <span v-else style="color:#65676b;">未发</span>
+                                </td>
+                                <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" :title="acc.today_content">{{ acc.today_content || '-' }}</td>
+                                <td>{{ acc.publish_time ? formatDate(acc.publish_time) : '-' }}</td>
+                                <td style="color:#fa3e3e; font-size:12px;">{{ acc.today_error || '' }}</td>
+                                <td>
+                                    <button v-if="acc.today_status === 'failed'" class="btn btn-sm btn-outline" @click="retryPublish(acc)">重试</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="!publishData.accounts || publishData.accounts.length === 0" class="empty-state" style="padding:30px;"><p>暂无发送账号</p></div>
+                </div>
+
+                <!-- 发帖历史 -->
+                <div class="mgmt-card">
+                    <h3>发帖历史</h3>
+                    <table class="mgmt-table">
+                        <thead>
+                            <tr>
+                                <th>账号</th>
+                                <th>日期</th>
+                                <th>状态</th>
+                                <th>内容预览</th>
+                                <th>错误信息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="rec in publishHistory" :key="rec.id">
+                                <td>{{ rec.account_name }}</td>
+                                <td>{{ rec.publish_date }}</td>
+                                <td>
+                                    <span v-if="rec.status === 'success'" style="color:#42b72a;">成功</span>
+                                    <span v-else-if="rec.status === 'failed'" style="color:#fa3e3e;">失败</span>
+                                    <span v-else style="color:#f7b928;">{{ rec.status }}</span>
+                                </td>
+                                <td style="max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" :title="rec.content">{{ rec.content ? rec.content.substring(0, 100) : '-' }}</td>
+                                <td style="color:#fa3e3e; font-size:12px;">{{ rec.error_message || '' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="publishHistory.length === 0" class="empty-state" style="padding:20px;"><p>暂无发帖记录</p></div>
+                </div>
+            </div>
+
+            <!-- ====== 未读消息 ====== -->
+            <div v-if="activeTab === 'unread'">
+                <div class="mgmt-card">
+                    <h3>
+                        Messenger 未读消息
+                        <button class="btn btn-sm btn-outline" @click="markAllRead()" v-if="unreadData.length > 0">全部标记已读</button>
+                    </h3>
+                    <p style="font-size:13px; color:#65676b; margin-bottom:16px;">监控运行时自动检测每个发送账号的Messenger未读消息角标。人工查看消息后可手动清零。</p>
+
+                    <div style="margin-bottom:16px; font-size:15px; font-weight:600;">
+                        总未读消息: <span :style="{ color: totalUnread > 0 ? '#fa3e3e' : '#42b72a' }">{{ totalUnread }}</span>
+                    </div>
+
+                    <table class="mgmt-table">
+                        <thead>
+                            <tr>
+                                <th>账号名称</th>
+                                <th>状态</th>
+                                <th>未读消息数</th>
+                                <th>最近检测时间</th>
+                                <th>最近清零时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="acc in unreadData" :key="acc.id">
+                                <td>{{ acc.name }}</td>
+                                <td>
+                                    <span v-if="acc.enabled && acc.status === 'active'" style="color:#42b72a;">正常</span>
+                                    <span v-else-if="acc.status === 'restricted'" style="color:#fa3e3e;">受限</span>
+                                    <span v-else style="color:#65676b;">{{ acc.status }}</span>
+                                </td>
+                                <td>
+                                    <span v-if="acc.unread_count > 0" style="background:#fa3e3e; color:white; padding:2px 10px; border-radius:12px; font-weight:700; font-size:14px;">{{ acc.unread_count }}</span>
+                                    <span v-else style="color:#42b72a;">0</span>
+                                </td>
+                                <td>{{ acc.unread_updated_at ? formatDate(acc.unread_updated_at) : '从未检测' }}</td>
+                                <td>{{ acc.unread_cleared_at ? formatDate(acc.unread_cleared_at) : '-' }}</td>
+                                <td>
+                                    <button v-if="acc.unread_count > 0" class="btn btn-sm btn-outline" @click="markRead(acc.id)">标记已读</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="unreadData.length === 0" class="empty-state" style="padding:30px;"><p>暂无发送账号</p></div>
+                </div>
+            </div>
+
             <!-- ====== 统计报表 (新增) ====== -->
             <div v-if="activeTab === 'report'">
                 <div class="mgmt-card">
@@ -778,6 +904,14 @@ createApp({
         const sendingTasksPage = ref(1);
         const sendingTaskFilters = ref({ status: '', task_type: '' });
 
+        // 自动发帖
+        const publishData = ref({ running: false, accounts: [] });
+        const publishHistory = ref([]);
+
+        // 未读消息
+        const unreadData = ref([]);
+        const totalUnread = ref(0);
+
         // 用户管理
         const users = ref([]);
         const newUser = reactive({ username: '', password: '', role: 'employee', parent_id: '' });
@@ -860,6 +994,8 @@ createApp({
                 loadStatus(); loadStats();
                 if (activeTab.value === 'posts') loadPosts(currentPage.value);
                 if (activeTab.value === 'sending') loadSendingStatus();
+                if (activeTab.value === 'publish') loadPublishStatus();
+                if (activeTab.value === 'unread') loadUnread();
                 if (activeTab.value === 'logs') loadLogs();
                 if (activeTab.value === 'dashboard') loadDashboard();
             }, 15000);
@@ -931,6 +1067,60 @@ createApp({
         async function loadDashboard() {
             const d = await fetchAPI('/api/stats/dashboard');
             if (d && d.success) dashboardData.value = d.data;
+        }
+
+        // 自动发帖
+        async function loadPublishStatus() {
+            const d = await fetchAPI('/api/publish/status');
+            if (d && d.success) publishData.value = d.data;
+            const h = await fetchAPI('/api/publish/history?per_page=20');
+            if (h && h.success) publishHistory.value = h.data;
+        }
+
+        async function startPublish() {
+            const d = await fetchAPI('/api/publish/start', { method: 'POST' });
+            if (d) { alert(d.message); loadPublishStatus(); }
+        }
+
+        async function stopPublish() {
+            if (!confirm('确定要停止发帖吗？')) return;
+            const d = await fetchAPI('/api/publish/stop', { method: 'POST' });
+            if (d) { alert(d.message); loadPublishStatus(); }
+        }
+
+        async function retryPublish(acc) {
+            // 找到该账号今天失败的记录，通过历史记录中查找
+            const hist = publishHistory.value.find(r => r.account_id === acc.account_id && r.status === 'failed');
+            if (hist) {
+                const d = await fetchAPI('/api/publish/retry/' + hist.id, { method: 'POST' });
+                if (d) { alert(d.message); setTimeout(() => loadPublishStatus(), 3000); }
+            } else {
+                // 直接触发发帖
+                const d = await fetchAPI('/api/publish/start', { method: 'POST' });
+                if (d) { alert(d.message); loadPublishStatus(); }
+            }
+        }
+
+        // 未读消息
+        async function loadUnread() {
+            const d = await fetchAPI('/api/accounts/unread');
+            if (d && d.success) {
+                unreadData.value = d.data;
+                totalUnread.value = d.total_unread;
+            }
+        }
+
+        async function markRead(accountId) {
+            const d = await fetchAPI('/api/accounts/' + accountId + '/mark-read', { method: 'POST' });
+            if (d && d.success) { loadUnread(); }
+            else { alert(d ? d.message : '操作失败'); }
+        }
+
+        async function markAllRead() {
+            if (!confirm('确定要将所有账号的未读消息清零吗？')) return;
+            const d = await fetchAPI('/api/accounts/mark-all-read', { method: 'POST' });
+            if (d && d.success) { alert(d.message); loadUnread(); }
+            else { alert(d ? d.message : '操作失败'); }
         }
 
         async function loadReport() {
@@ -1177,6 +1367,8 @@ createApp({
         function refreshData() {
             loadStatus(); loadStats(); loadPosts(currentPage.value);
             if (activeTab.value === 'sending') loadSendingStatus();
+            if (activeTab.value === 'publish') loadPublishStatus();
+            if (activeTab.value === 'unread') loadUnread();
             if (activeTab.value === 'dashboard') loadDashboard();
         }
 
@@ -1202,10 +1394,14 @@ createApp({
             activeTab, selectedPost, loading, currentPage, totalPosts, totalPages, filters, visiblePages,
             newAccount, newWhatsApp,
             sendingTasks, sendingTasksTotal, sendingTasksPage, sendingTaskFilters,
+            publishData, publishHistory,
+            unreadData, totalUnread,
             users, newUser, managers,
             reportFilters, reportData,
             doLogin, doLogout,
             loadPosts, loadLogs, loadAccounts, loadWhatsApp, loadSendingStatus, loadDashboard, loadSendingTasks, loadReport, drillDownReport, retryTranslations, testTranslation,
+            loadPublishStatus, startPublish, stopPublish, retryPublish,
+            loadUnread, markRead, markAllRead,
             loadUsers, createUser, toggleUser, resetUserPassword, deleteUser,
             startMonitor, stopMonitor, startSending, stopSending, refreshData, openPostDetail,
             createAccount, deleteAccount, toggleAccount, updateAccountWhatsApp, refreshCookie, liftRestriction,

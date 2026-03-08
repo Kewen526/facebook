@@ -20,7 +20,7 @@ from config import (
 )
 from models import (
     init_db, get_session, Post, PostAction, MonitorLog,
-    Account, WhatsAppAccount, SendTask, User, PostFeedback
+    Account, WhatsAppAccount, SendTask, User, PostFeedback, PostPublish
 )
 from monitor import start_monitor_thread, stop_monitor, monitor_status
 
@@ -1264,6 +1264,220 @@ def set_browser_headless():
     config.BROWSER_HEADLESS = bool(data['headless'])
     mode = "隐藏浏览器" if config.BROWSER_HEADLESS else "显示浏览器"
     return jsonify({"success": True, "message": f"已设置为{mode}模式（下次启动浏览器生效）", "headless": config.BROWSER_HEADLESS})
+
+
+# ============ 自动发帖 API ============
+@app.route('/api/publish/status')
+@login_required
+def get_publish_status():
+    """获取所有发送账号今日发帖状态"""
+    from publisher import get_publisher_status
+    db = request.db
+    user = request.current_user
+    today = datetime.now(timezone.utc).date()
+
+    if user.role == 'admin':
+        sender_accounts = db.query(Account).filter(Account.account_type == 'sender').all()
+    else:
+        user_ids = _get_team_user_ids(user, db)
+        sender_accounts = db.query(Account).filter(
+            Account.account_type == 'sender',
+            Account.user_id.in_(user_ids)
+        ).all()
+
+    result = []
+    for acc in sender_accounts:
+        publish = db.query(PostPublish).filter(
+            PostPublish.account_id == acc.id,
+            PostPublish.publish_date == today
+        ).first()
+        result.append({
+            "account_id": acc.id,
+            "account_name": acc.name,
+            "enabled": acc.enabled,
+            "today_status": publish.status if publish else "未发",
+            "today_content": publish.content[:200] if publish and publish.content else None,
+            "today_error": publish.error_message if publish else None,
+            "publish_time": publish.updated_at.isoformat() if publish and publish.updated_at else None,
+        })
+
+    publisher_status = get_publisher_status()
+    return jsonify({
+        "success": True,
+        "data": {
+            "running": publisher_status["running"],
+            "accounts": result,
+        }
+    })
+
+
+@app.route('/api/publish/start', methods=['POST'])
+@login_required
+def start_publish():
+    """手动触发发帖"""
+    from publisher import start_publisher, _publisher_running
+    if _publisher_running:
+        return jsonify({"success": False, "message": "发帖任务正在运行中"})
+
+    user = request.current_user
+    user_id = user.id if user.role != 'admin' else None
+    start_publisher(user_id=user_id)
+    return jsonify({"success": True, "message": "发帖任务已启动"})
+
+
+@app.route('/api/publish/stop', methods=['POST'])
+@login_required
+def stop_publish():
+    """停止发帖"""
+    from publisher import stop_publisher
+    stop_publisher()
+    return jsonify({"success": True, "message": "已发送停止信号"})
+
+
+@app.route('/api/publish/history')
+@login_required
+def get_publish_history():
+    """获取发帖历史记录"""
+    db = request.db
+    user = request.current_user
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+
+    query = db.query(PostPublish)
+
+    if user.role != 'admin':
+        user_ids = _get_team_user_ids(user, db)
+        account_ids = [a.id for a in db.query(Account).filter(
+            Account.account_type == 'sender',
+            Account.user_id.in_(user_ids)
+        ).all()]
+        query = query.filter(PostPublish.account_id.in_(account_ids))
+
+    total = query.count()
+    records = query.order_by(PostPublish.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+
+    return jsonify({
+        "success": True,
+        "data": [r.to_dict() for r in records],
+        "total": total,
+        "page": page,
+        "total_pages": (total + per_page - 1) // per_page,
+    })
+
+
+@app.route('/api/publish/retry/<int:record_id>', methods=['POST'])
+@login_required
+def retry_publish(record_id):
+    """重试单条发帖记录"""
+    db = request.db
+    record = db.query(PostPublish).filter(PostPublish.id == record_id).first()
+    if not record:
+        return jsonify({"success": False, "message": "记录不存在"}), 404
+    if record.status not in ('failed',):
+        return jsonify({"success": False, "message": "只能重试失败的记录"})
+
+    # 删除失败记录，重新触发
+    db.delete(record)
+    db.commit()
+
+    from publisher import publish_for_account
+    account = db.query(Account).filter(Account.id == record.account_id).first()
+    if account and account.cookie_url:
+        import threading
+        t = threading.Thread(
+            target=publish_for_account,
+            args=(account.id, account.name, account.cookie_url),
+            daemon=True
+        )
+        t.start()
+        return jsonify({"success": True, "message": f"已重新触发 {account.name} 发帖"})
+    return jsonify({"success": False, "message": "账号不可用"})
+
+
+# ============ 未读消息 API ============
+@app.route('/api/accounts/unread')
+@login_required
+def get_accounts_unread():
+    """获取所有发送账号的Messenger未读消息数"""
+    db = request.db
+    user = request.current_user
+
+    # 查询所有sender账号（未读消息主要关注sender）
+    if user.role == 'admin':
+        accounts_query = db.query(Account).filter(
+            Account.account_type == 'sender'
+        )
+    else:
+        user_ids = _get_team_user_ids(user, db)
+        accounts_query = db.query(Account).filter(
+            Account.account_type == 'sender',
+            Account.user_id.in_(user_ids)
+        )
+
+    accounts_list = accounts_query.order_by(Account.unread_count.desc()).all()
+
+    result = []
+    total_unread = 0
+    for acc in accounts_list:
+        unread = acc.unread_count or 0
+        total_unread += unread
+        result.append({
+            "id": acc.id,
+            "name": acc.name,
+            "enabled": acc.enabled,
+            "status": acc.status,
+            "unread_count": unread,
+            "unread_updated_at": acc.unread_updated_at.isoformat() if acc.unread_updated_at else None,
+            "unread_cleared_at": acc.unread_cleared_at.isoformat() if acc.unread_cleared_at else None,
+        })
+
+    return jsonify({
+        "success": True,
+        "data": result,
+        "total_unread": total_unread,
+    })
+
+
+@app.route('/api/accounts/<int:account_id>/mark-read', methods=['POST'])
+@login_required
+def mark_account_read(account_id):
+    """单个账号未读消息清零"""
+    db = request.db
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        return jsonify({"success": False, "message": "账号不存在"}), 404
+
+    account.unread_count = 0
+    account.unread_cleared_at = datetime.now(timezone.utc)
+    db.commit()
+    return jsonify({"success": True, "message": f"{account.name} 未读消息已清零"})
+
+
+@app.route('/api/accounts/mark-all-read', methods=['POST'])
+@login_required
+def mark_all_read():
+    """全部账号未读消息清零"""
+    db = request.db
+    user = request.current_user
+    now = datetime.now(timezone.utc)
+
+    if user.role == 'admin':
+        accounts_query = db.query(Account).filter(Account.account_type == 'sender')
+    else:
+        user_ids = _get_team_user_ids(user, db)
+        accounts_query = db.query(Account).filter(
+            Account.account_type == 'sender',
+            Account.user_id.in_(user_ids)
+        )
+
+    count = 0
+    for acc in accounts_query.all():
+        if acc.unread_count and acc.unread_count > 0:
+            acc.unread_count = 0
+            acc.unread_cleared_at = now
+            count += 1
+    db.commit()
+    return jsonify({"success": True, "message": f"已清零 {count} 个账号的未读消息"})
 
 
 if __name__ == '__main__':

@@ -396,3 +396,51 @@ def generate_dm_without_whatsapp(post_content: str) -> Optional[str]:
     if result and "判定结果" not in result:
         return _clean_generated_text(result)
     return _clean_generated_text(result) if result else result
+
+
+# ============ 自动发帖内容生成 ============
+
+POST_CONTENT_PROMPT = """You are a professional China-based sourcing agent writing a Facebook post to attract potential buyers/dropshippers. Be creative and vary your wording every time.
+
+STRICT RULES:
+- Output ONLY in English. No Chinese characters allowed.
+- Output ONLY the post text. No explanation, no labels, no quotation marks.
+- Each post must be unique and different from previous ones.
+- Do NOT use hashtags excessively (max 3-5 relevant ones at the end).
+
+STYLE GUIDE:
+- Write as a reliable sourcing agent/supplier from China
+- Sound professional, genuine, and approachable — not spammy
+- Keep it 3-6 sentences, 60-150 words
+- Core value propositions (pick 2-3 per post, vary the combination):
+  * Factory-direct pricing / competitive quotes
+  * No MOQ / low MOQ for small businesses
+  * Fast worldwide shipping (7-15 days)
+  * Shopify/WooCommerce integration with auto order sync
+  * ERP system with automatic tracking upload
+  * Custom branding/packaging/private label
+  * Product sourcing from 1688/Taobao/factories
+  * Quality inspection before shipping
+  * After-sales support and returns handling
+  * Free product samples available
+  * One-on-one dedicated service
+- End with a call-to-action encouraging DMs or comments
+- Tone: helpful, trustworthy, solution-oriented
+- Do NOT use hype words like "amazing", "incredible", "best ever"
+- Do NOT use excessive emojis (0-3 max)
+
+GOOD EXAMPLES:
+- "Looking for a reliable sourcing partner in China? We help dropshippers and small business owners get factory-direct pricing without the hassle. No MOQ, fast shipping to US/EU/worldwide, and we handle quality checks before every order ships. DM me to get a free quote on any product you need! #dropshipping #sourcing #ecommerce"
+- "Running a Shopify store and tired of unreliable suppliers? We connect your store directly to our ERP system — orders sync automatically, tracking numbers upload within 24 hours. From product sourcing to doorstep delivery, we've got you covered. Comment below or send a message to learn more."
+- "Whether you need 1 piece or 1000, we source it from China at the lowest factory price. Custom packaging, private labeling, and quality inspection included. Serving dropshippers and brand owners worldwide. Let's talk about your product needs!"
+
+Generate 1 Facebook post now:"""
+
+
+def generate_post_content() -> Optional[str]:
+    """生成Facebook自动发帖内容"""
+    logger.info("生成自动发帖内容...")
+    result = analyze_with_ai(POST_CONTENT_PROMPT, temperature=0.95)
+    if result and "判定结果" not in result:
+        return _clean_generated_text(result)
+    return _clean_generated_text(result) if result else result

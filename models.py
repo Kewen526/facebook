@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from hashlib import sha256
-from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, DateTime, Date, ForeignKey, Index
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
@@ -103,6 +103,9 @@ class Account(Base):
     rate_limited_until = Column(DateTime, nullable=True)  # 消息限制解除时间(24小时后自动恢复)
     enabled = Column(Boolean, default=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # 创建者/所属用户
+    unread_count = Column(Integer, default=0)  # Messenger未读消息数
+    unread_updated_at = Column(DateTime, nullable=True)  # 最近检测未读时间
+    unread_cleared_at = Column(DateTime, nullable=True)  # 最近手动清零时间
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
@@ -132,6 +135,9 @@ class Account(Base):
             "enabled": self.enabled,
             "user_id": self.user_id,
             "owner_name": self.owner.username if self.owner else None,
+            "unread_count": self.unread_count or 0,
+            "unread_updated_at": self.unread_updated_at.isoformat() if self.unread_updated_at else None,
+            "unread_cleared_at": self.unread_cleared_at.isoformat() if self.unread_cleared_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -310,6 +316,41 @@ class SendTask(Base):
         }
 
 
+class PostPublish(Base):
+    """发帖记录表 - 每个发送账号每天自动发布一篇推广帖子"""
+    __tablename__ = 'post_publishes'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(Integer, ForeignKey('accounts.id'), nullable=False, index=True)
+    content = Column(Text, nullable=False)  # 发布的帖子内容
+    status = Column(String(32), default='pending')  # pending / publishing / success / failed
+    publish_date = Column(Date, nullable=False)  # 发布日期（每天一篇）
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    account = relationship("Account")
+
+    __table_args__ = (
+        Index('idx_publish_account_date', 'account_id', 'publish_date', unique=True),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "account_id": self.account_id,
+            "account_name": self.account.name if self.account else None,
+            "content": self.content,
+            "status": self.status,
+            "publish_date": self.publish_date.isoformat() if self.publish_date else None,
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class MonitorLog(Base):
     """监控日志表"""
     __tablename__ = 'monitor_logs'
@@ -354,26 +395,38 @@ def init_db():
 
 
 def _migrate_users_table():
-    """检查并补齐users表的新增列"""
+    """检查并补齐users表和accounts表的新增列"""
     try:
         from sqlalchemy import inspect, text
         insp = inspect(engine)
-        if 'users' not in insp.get_table_names():
-            return
-        existing = {col['name'] for col in insp.get_columns('users')}
         migrations = []
-        if 'parent_id' not in existing:
-            migrations.append("ALTER TABLE users ADD COLUMN parent_id INT NULL")
-        if 'enabled' not in existing:
-            migrations.append("ALTER TABLE users ADD COLUMN enabled TINYINT(1) DEFAULT 1")
-        if 'updated_at' not in existing:
-            migrations.append("ALTER TABLE users ADD COLUMN updated_at DATETIME NULL")
+
+        # users表迁移
+        if 'users' in insp.get_table_names():
+            existing = {col['name'] for col in insp.get_columns('users')}
+            if 'parent_id' not in existing:
+                migrations.append("ALTER TABLE users ADD COLUMN parent_id INT NULL")
+            if 'enabled' not in existing:
+                migrations.append("ALTER TABLE users ADD COLUMN enabled TINYINT(1) DEFAULT 1")
+            if 'updated_at' not in existing:
+                migrations.append("ALTER TABLE users ADD COLUMN updated_at DATETIME NULL")
+
+        # accounts表迁移 - 新增未读消息字段
+        if 'accounts' in insp.get_table_names():
+            existing = {col['name'] for col in insp.get_columns('accounts')}
+            if 'unread_count' not in existing:
+                migrations.append("ALTER TABLE accounts ADD COLUMN unread_count INT DEFAULT 0")
+            if 'unread_updated_at' not in existing:
+                migrations.append("ALTER TABLE accounts ADD COLUMN unread_updated_at DATETIME NULL")
+            if 'unread_cleared_at' not in existing:
+                migrations.append("ALTER TABLE accounts ADD COLUMN unread_cleared_at DATETIME NULL")
+
         if migrations:
             with engine.begin() as conn:
                 for sql in migrations:
                     print(f"数据库迁移: {sql}")
                     conn.execute(text(sql))
-            print("users表列补齐完成")
+            print("表列补齐完成")
     except Exception as e:
         print(f"数据库迁移检查失败（可忽略如果表结构已正确）: {e}")
 
