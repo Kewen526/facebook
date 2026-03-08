@@ -818,6 +818,9 @@ def delete_account(account_id):
     if not account:
         return jsonify({"success": False, "message": "账号不存在"}), 404
     try:
+        # 先删除关联的发送任务和发帖记录，避免外键约束报错
+        db.query(SendTask).filter(SendTask.account_id == account_id).delete()
+        db.query(PostPublish).filter(PostPublish.account_id == account_id).delete()
         db.delete(account)
         db.commit()
         return jsonify({"success": True, "message": "删除成功"})
